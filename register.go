@@ -48,6 +48,7 @@ func getFactory(in any) factoryHandler {
 	return nil
 }
 
+// Register a new type with corresponding converters
 func Register[T any](c RegisteredConverters) {
 	f := factory[T]{}
 	tname := getTypeName(reflect.TypeOf(*new(T)))

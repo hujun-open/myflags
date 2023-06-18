@@ -8,7 +8,8 @@ import (
 	"strings"
 )
 
-type EncodingTextMarshaler interface {
+// encodingTextMarshaler is the interface includes both encoding.TextMarshaler and encoding.TextUnmarshaler
+type encodingTextMarshaler interface {
 	encoding.TextMarshaler
 	encoding.TextUnmarshaler
 }
@@ -23,19 +24,23 @@ func DefaultRenamer(parent, name string) string {
 	return strings.ToLower(parent + name)
 }
 
+// Filler could fill a flagset with a struct with Fill() method
 type Filler struct {
 	renamer RenameFunc
 }
 
+// FillerOption is an option when creating new Filler
 type FillerOption func(filler *Filler)
 
-// WithRenamer specifies the rename function
+// WithRenamer returns a FillerOption that specifies the rename function
 func WithRenamer(r RenameFunc) FillerOption {
 	return func(filler *Filler) {
 		filler.renamer = r
 	}
 }
 
+// NewFiller creates a new Filler,
+// optionally, a list of FillerOptions could be specified.
 func NewFiller(options ...FillerOption) *Filler {
 	r := &Filler{
 		renamer: DefaultRenamer,
@@ -46,8 +51,9 @@ func NewFiller(options ...FillerOption) *Filler {
 	return r
 }
 
-var textEncodingInt = reflect.TypeOf((*EncodingTextMarshaler)(nil)).Elem()
+var textEncodingInt = reflect.TypeOf((*encodingTextMarshaler)(nil)).Elem()
 
+// Fill fs with struct in
 func (filler *Filler) Fill(fs *flag.FlagSet, in any) error {
 	t := reflect.TypeOf(in)
 	if t.Kind() == reflect.Ptr && t.Elem().Kind() == reflect.Struct {
@@ -85,7 +91,7 @@ func setStandardFlagType(fs *flag.FlagSet, ref reflect.Value, name, usage string
 }
 
 func setTextEncodingType(fs *flag.FlagSet, ref reflect.Value, name, usage string) {
-	casted := ref.Interface().(EncodingTextMarshaler)
+	casted := ref.Interface().(encodingTextMarshaler)
 	fs.TextVar(casted, name, casted, usage) //This requires go 1.19+
 }
 

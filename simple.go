@@ -14,10 +14,12 @@ func getTypeName(t reflect.Type) string {
 }
 
 // FromStrFunc is a function convert string s into a specific type T, the tag is the struct field tag, as addtional input.
-// see time.go and net.go for implementation examples
-type FromStrFunc func(s string, tag reflect.StructTag) (any, error)
+// see time.go for implementation examples
+type FromStrFunc func(s string, tags reflect.StructTag) (any, error)
 
-type ToStrFunc func(any, reflect.StructTag) string
+// ToStrFunc is a function convert in to string, the tag is the struct field tag, as addtional input.
+// see time.go for implementation examples
+type ToStrFunc func(in any, tags reflect.StructTag) string
 
 type simpleType[T any] struct {
 	val     *T

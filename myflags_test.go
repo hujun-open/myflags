@@ -84,10 +84,10 @@ func (tc *testCase) do(t *testing.T) error {
 		return err
 	}
 	if !deepEqual(tc.input, tc.expectedResult) {
-		return fmt.Errorf("\n%+v is different from expected:\n%+v", myflags.PrettyStruc(tc.input, ""), myflags.PrettyStruc(tc.expectedResult, ""))
+		return fmt.Errorf("\n%+v is different from expected:\n%+v", myflags.PrettyStruct(tc.input, ""), myflags.PrettyStruct(tc.expectedResult, ""))
 	}
-	t.Logf("result:\n%v\n", myflags.PrettyStruc(tc.input, ""))
-	t.Logf("expected:\n%v\n", myflags.PrettyStruc(tc.expectedResult, ""))
+	t.Logf("result:\n%v\n", myflags.PrettyStruct(tc.input, ""))
+	t.Logf("expected:\n%v\n", myflags.PrettyStruct(tc.expectedResult, ""))
 	// fmt.Printf("result:::%+v\n", tc.input)
 	// fmt.Printf("expected:::%+v\n", tc.expectedResult)
 	return nil

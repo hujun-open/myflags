@@ -10,7 +10,7 @@ type textMarshalConverter struct {
 }
 
 func (tmc *textMarshalConverter) ToStr(in any, tag reflect.StructTag) string {
-	buf, _ := in.(EncodingTextMarshaler).MarshalText()
+	buf, _ := in.(encodingTextMarshaler).MarshalText()
 	return string(buf)
 }
 

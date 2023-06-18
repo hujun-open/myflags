@@ -5,8 +5,8 @@ import (
 	"reflect"
 )
 
-// PrettyStruc returns a pretty formatted string representation of in
-func PrettyStruc(in any, prefix string) string {
+// PrettyStruct returns a pretty formatted string representation of in
+func PrettyStruct(in any, prefix string) string {
 	inT := reflect.TypeOf(in)
 	inV := reflect.ValueOf(in)
 	if !inV.IsValid() {
@@ -26,7 +26,7 @@ func PrettyStruc(in any, prefix string) string {
 	case reflect.Array, reflect.Slice:
 		rs := ""
 		for i := 0; i < inV.Len(); i++ {
-			rs += fmt.Sprintf("%v,", PrettyStruc(inV.Index(i).Interface(), prefix))
+			rs += fmt.Sprintf("%v,", PrettyStruct(inV.Index(i).Interface(), prefix))
 		}
 		return rs
 	case reflect.Struct:
@@ -48,10 +48,10 @@ func PrettyStruc(in any, prefix string) string {
 					rs += fmt.Sprintf("%v:%v\n", prefix+inT.Field(i).Name, r.String())
 				} else {
 					if fieldV.Kind() == reflect.Struct {
-						rs += fmt.Sprintf("%v:\n%v", prefix+inT.Field(i).Name, PrettyStruc(inV.Field(i).Interface(), prefix+"    "))
+						rs += fmt.Sprintf("%v:\n%v", prefix+inT.Field(i).Name, PrettyStruct(inV.Field(i).Interface(), prefix+"    "))
 					} else {
 						// rs += fmt.Sprintf("%v:%v\n", prefix+inT.Field(i).Name, fieldV.Interface())
-						rs += fmt.Sprintf("%v:%v\n", prefix+inT.Field(i).Name, PrettyStruc(fieldV.Interface(), prefix+"    "))
+						rs += fmt.Sprintf("%v:%v\n", prefix+inT.Field(i).Name, PrettyStruct(fieldV.Interface(), prefix+"    "))
 					}
 				}
 			}
