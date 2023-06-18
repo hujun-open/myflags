@@ -1,3 +1,5 @@
+[![Go package](https://github.com/hujun-open/myflags/actions/workflows/CI.yaml/badge.svg)](https://github.com/hujun-open/myflags/actions/workflows/CI.yaml)
+[![PkgGoDev](https://pkg.go.dev/badge/github.com/hujun-open/myflags)](https://pkg.go.dev/github.com/hujun-open/myflags)
 # myflags
 myflags is a Golang module to make command line flag easier, it creates command line flags based on fields in a struct, so user doesn't need to manually create the flags one by one. it also supports more types than `flag` module, and easily extensible for new types, user could even add support for existing type without using alias type.
 
