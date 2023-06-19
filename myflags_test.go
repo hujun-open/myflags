@@ -61,6 +61,7 @@ type TestStruct struct {
 		NestCounter *uint32 `base:"16"`
 	}
 	Addr        netip.Addr
+	PAddr       *netip.Addr
 	AddrArray   [2]*netip.Addr
 	AddrSlice   []*netip.Addr
 	AddrNPSlice []netip.Addr `alias:"anps"`
@@ -198,6 +199,13 @@ func TestMyflags(t *testing.T) {
 						Counter: 11,
 					},
 				},
+			},
+		},
+		{ //case 9
+			input: TestStruct{},
+			Args:  []string{"-paddr", "1.1.3.3"},
+			expectedResult: TestStruct{
+				PAddr: createPAddr("1.1.3.3"),
 			},
 		},
 	}

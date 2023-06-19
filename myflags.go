@@ -167,7 +167,7 @@ func (filler *Filler) walk(fs *flag.FlagSet, inV reflect.Value, nameprefix, usag
 				if fieldT.Type.Kind() == reflect.Pointer {
 					if fieldT.Type.Implements(textEncodingInt) {
 						//pointer to textmarshale
-						setTextEncodingType(fs, field.Addr(), fname, usage)
+						setTextEncodingType(fs, field, fname, usage)
 						continue
 					}
 				} else {
