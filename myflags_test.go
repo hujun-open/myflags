@@ -51,6 +51,7 @@ func (sl *SubnoList) UnmarshalText(text []byte) error {
 type Sub struct {
 	SubCounter        uint32
 	SubPointerCounter *uint32
+	SubFloat64        float64
 	SubCounterSlice   []*uint32
 }
 
@@ -60,13 +61,16 @@ type TestStruct struct {
 	Nested struct {
 		NestCounter *uint32 `base:"16"`
 	}
-	Addr        netip.Addr
-	PAddr       *netip.Addr
-	AddrArray   [2]*netip.Addr
-	AddrSlice   []*netip.Addr
-	AddrNPSlice []netip.Addr `alias:"anps"`
-	Time        time.Time    `layout:"2006 02 Jan 15:04"`
-	SNL         SubnoList
+	Addr           netip.Addr
+	PAddr          *netip.Addr
+	BoolVar        bool
+	BoolSlice      []bool
+	AddrArray      [2]*netip.Addr
+	AddrSlice      []*netip.Addr
+	AddrNPSlice    []netip.Addr `alias:"anps"`
+	Time           time.Time    `layout:"2006 02 Jan 15:04"`
+	SNL            SubnoList
+	ShouldSkipAddr netip.Addr `skipmarshal:""`
 }
 
 type testCase struct {
@@ -77,7 +81,11 @@ type testCase struct {
 }
 
 func (tc *testCase) do(t *testing.T) error {
-	fs := flag.NewFlagSet("test", flag.ExitOnError)
+	fflag := flag.ExitOnError
+	if tc.shouldFail {
+		fflag = flag.ContinueOnError
+	}
+	fs := flag.NewFlagSet("test", fflag)
 	filler := myflags.NewFiller()
 	filler.Fill(fs, &tc.input)
 	err := fs.Parse(tc.Args)
@@ -116,7 +124,15 @@ func TestMyflags(t *testing.T) {
 				AddrSlice: []*netip.Addr{createPAddr("1.1.1.1")},
 			},
 		},
-		{ //case 2, should fail
+		{ //case 2
+			input: TestStruct{},
+			Args:  []string{"-boolvar"},
+			expectedResult: TestStruct{
+				BoolVar: true,
+			},
+		},
+
+		{ //case 3, should fail
 			input: TestStruct{},
 			Args:  []string{"-addrslice", "1.1.1.1,1.1.1.2"},
 			expectedResult: TestStruct{
@@ -124,14 +140,29 @@ func TestMyflags(t *testing.T) {
 			},
 			shouldFail: true,
 		},
-		{ //case 3
+		{ //case 4
+			input: TestStruct{},
+			Args:  []string{"-boolslice", "true,false"},
+			expectedResult: TestStruct{
+				BoolSlice: []bool{true, false},
+			},
+		},
+		{ //case 5, nega case
+			input: TestStruct{},
+			Args:  []string{"-boolslice", "true,false"},
+			expectedResult: TestStruct{
+				BoolSlice: []bool{true, true},
+			},
+			shouldFail: true,
+		},
+		{ //case 6
 			input: TestStruct{},
 			Args:  []string{"-addrarray", "1.1.1.1,1.1.1.2"},
 			expectedResult: TestStruct{
 				AddrArray: [2]*netip.Addr{createPAddr("1.1.1.1"), createPAddr("1.1.1.2")},
 			},
 		},
-		{ //case 4
+		{ //case 7
 			input: TestStruct{},
 			Args:  []string{"-nestednestcounter", "99"},
 			expectedResult: TestStruct{
@@ -142,7 +173,7 @@ func TestMyflags(t *testing.T) {
 				},
 			},
 		},
-		{ //case 5
+		{ //case 8
 			input: TestStruct{},
 			Args:  []string{"-subsubpointercounter", "100", "-subsubcounterslice", "3,4,5"},
 			expectedResult: TestStruct{
@@ -152,8 +183,17 @@ func TestMyflags(t *testing.T) {
 				},
 			},
 		},
+		{ //case 9
+			input: TestStruct{},
+			Args:  []string{"-subsubfloat64", "100.1"},
+			expectedResult: TestStruct{
+				Sub: Sub{
+					SubFloat64: 100.1,
+				},
+			},
+		},
 
-		{ //case 6
+		{ //case 10
 			input: TestStruct{},
 			Args:  []string{"-sub1subpointercounter", "100", "-sub1subcounterslice", "3,4,5"},
 			expectedResult: TestStruct{
@@ -163,7 +203,7 @@ func TestMyflags(t *testing.T) {
 				},
 			},
 		},
-		{ //case 7
+		{ //case 11
 			input: TestStruct{},
 			Args:  []string{"-sub1subpointercounter", "100", "-sub1subcounterslice", "5,4,3"},
 			expectedResult: TestStruct{
@@ -174,7 +214,7 @@ func TestMyflags(t *testing.T) {
 			},
 			shouldFail: true,
 		},
-		{ //case 8
+		{ //case 12
 			input: TestStruct{},
 			Args:  []string{"-anps", "1.1.1.1,2001:dead::beef"},
 			expectedResult: TestStruct{
@@ -184,7 +224,7 @@ func TestMyflags(t *testing.T) {
 				},
 			},
 		},
-		{ //case 8
+		{ //case 13
 			input: TestStruct{},
 			Args:  []string{"-snl", "9,10,11"},
 			expectedResult: TestStruct{
@@ -201,12 +241,20 @@ func TestMyflags(t *testing.T) {
 				},
 			},
 		},
-		{ //case 9
+		{ //case 14
 			input: TestStruct{},
 			Args:  []string{"-paddr", "1.1.3.3"},
 			expectedResult: TestStruct{
 				PAddr: createPAddr("1.1.3.3"),
 			},
+		},
+		{ //case 15
+			input: TestStruct{},
+			Args:  []string{"-shouldskipaddr", "1.1.3.3"},
+			expectedResult: TestStruct{
+				ShouldSkipAddr: *createPAddr("1.1.3.3"),
+			},
+			shouldFail: true,
 		},
 	}
 

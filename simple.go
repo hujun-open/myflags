@@ -26,12 +26,14 @@ type simpleType[T any] struct {
 	tags    reflect.StructTag
 	fromStr FromStrFunc
 	toStr   ToStrFunc
+	isBool  bool
 }
 
-func newSimpleType[T any](from FromStrFunc, to ToStrFunc, tag reflect.StructTag) simpleType[T] {
-	return simpleType[T]{val: new(T), toStr: to, fromStr: from, tags: tag}
+func newSimpleType[T any](from FromStrFunc, to ToStrFunc, tag reflect.StructTag, isbool bool) simpleType[T] {
+	return simpleType[T]{val: new(T), toStr: to, fromStr: from, tags: tag, isBool: isbool}
 }
 
+// implment flag.Value interface
 func (v *simpleType[T]) String() string {
 	if v.val == nil {
 		return fmt.Sprint(nil)
@@ -39,6 +41,7 @@ func (v *simpleType[T]) String() string {
 	return v.toStr(*v.val, v.tags)
 }
 
+// implment flag.Value interface
 func (v *simpleType[T]) Set(s string) error {
 	r, err := v.fromStr(s, v.tags)
 	if err != nil {
@@ -51,14 +54,20 @@ func (v *simpleType[T]) Set(s string) error {
 	return nil
 }
 
+// implment flag.Value interface
+func (v *simpleType[T]) IsBoolFlag() bool { return v.isBool }
+
 type factory[T any] struct{}
 
 func (f *factory[T]) process(fs *flag.FlagSet, ref reflect.Value, tag reflect.StructTag, name, usage string) {
 	// if ref.Type().Elem().Kind()
-
+	isbool := false
+	if reflect.TypeOf(*new(T)).Kind() == reflect.Bool {
+		isbool = true
+	}
 	casted := ref.Interface().(*T)
 	conv := globalRegistry.GetViaInterface(ref.Interface())
-	newval := newSimpleType[T](conv.FromStr, conv.ToStr, tag)
+	newval := newSimpleType[T](conv.FromStr, conv.ToStr, tag, isbool)
 	newval.SetRef(casted)
 	fs.Var(&newval, name, usage)
 }

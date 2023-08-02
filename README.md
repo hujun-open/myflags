@@ -122,7 +122,12 @@ By default, the name of created flag is the lowercase of struct field name, if t
 
 Optionally a renaming function could be supplied when creating the `Filler`, myflags uses the renaming function returned string as the flag name.
 
-A optional struct tag "alias" could be used to override above generated name.
+
+## Struct Field Tag
+myflags support following optional struct field tags:
+
+- "alias": override generated name as described above
+- "skipflag": skip the field for flag 
 
 
 ## Extension

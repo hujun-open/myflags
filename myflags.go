@@ -53,6 +53,10 @@ func NewFiller(options ...FillerOption) *Filler {
 
 var textEncodingInt = reflect.TypeOf((*encodingTextMarshaler)(nil)).Elem()
 
+const (
+	SkipTag = "skipflag"
+)
+
 // Fill fs with struct in
 func (filler *Filler) Fill(fs *flag.FlagSet, in any) error {
 	t := reflect.TypeOf(in)
@@ -141,6 +145,9 @@ func (filler *Filler) walk(fs *flag.FlagSet, inV reflect.Value, nameprefix, usag
 			if fieldT.IsExported() {
 				//only handle exported field
 				//get usage
+				if _, exists := fieldT.Tag.Lookup(SkipTag); exists {
+					continue
+				}
 				usage, _ := fieldT.Tag.Lookup("usage")
 				fname := fieldT.Name
 				fname = filler.renamer(nameprefix, fname)
