@@ -3,74 +3,65 @@
 # myflags
 myflags is a Golang module to make command line flag easier, it creates command line flags based on fields in a struct, so user doesn't need to manually create the flags one by one. it also supports more types than `flag` module, and easily extensible for new types, user could even add support for existing type without using alias type.
 
+myflags also support multiple and hierarchical actions, each action could have a set of its own parameters and sub-actions, for example a file compression tool `cptool` could have "compress" and "extract" action, and each has different parameters, and "compress" could have sub-actions like "zipfoler" and "zipfile", each then again has different parameters. 
+
+Input wise, parameters of an action has prefix "-", while action doesn't have any prefix.
+
+for example, compress a folder could be command line input like `cptool compress -profile <profile_name> zipfolder -foldername <foldername>`.
+
+## Struct Field Tags
+Following struct field tags are supported:
+
+- skipflag: skip the field for flagging
+- alias: use the specified alias as the name of the parameter
+- usage: the usage string of the parameter 
+
+
 ## Quick Start 
 Using myflags is straight forward:
 
-1. define all flags in a struct
+1. define all flags in a struct, each action is a field whose type is another struct.
 2. create a `Filler` with the struct, call `Fill` method with the struct variable with default value. 
 3. call `flag.Parse()`
 
 Following is an example:
 ```
-package main
-
-import (
-	"flag"
-	"fmt"
-	"log"
-	"net/netip"
-	"time"
-
-	"github.com/hujun-open/myflags"
-)
-
-type Conf struct {
-	Addr      *netip.Addr
-	Name      string
-	StartTime time.Time `layout:"2006 02 Jan 15:04"` //layout is the time format string
-	Max       uint32    `base:"16"` //use base 16
-}
-
-func main() {
-    //define the default value
-	defaultConf := &Conf{
-		Max: 15,
-	}
-	err := myflags.NewFiller().Fill(flag.CommandLine, defaultConf)
-	if err != nil {
-		log.Fatal(err)
-	}
-	flag.Parse()
-	fmt.Printf("%+v\n", *defaultConf)
-}
-
 ```
 the created flags:
 ```
- .\test.exe -?
+.\cptool.exe -?
 flag provided but not defined: -?
-Usage of C:\hujun\gomodules\src\test2\test.exe:
-  -addr value
-
-  -max value
-         (default f)
-  -name value
-         (default )
-  -starttime value
-         (default 0001 01 Jan 00:00)
+a zip command
+  - configfile: working profile
+        default:default.conf
+  = compress: to compress things
+    - profile:
+    - s:
+        default:false
+    = dryrun: dry run, doesn't actually create any file
+    = zipfolder: zip a folder
+      - folder: specify folder name
+    = zipfile: zip a file
+      - f: specify file name
+        default:defaultzip.file
+  = extract: to unzip things
+    - inputfile: input zip file
+  = help: help
 
 ```
 some parsing results:
 ```
- .\test.exe -name tom
-{Addr:invalid IP Name:tom StartTime:0001-01-01 00:00:00 +0000 UTC Max:15}
+.\cptool.exe -configfile cp.conf compress -profile my.profile -s zipfilder -folder ./bigfolder/
+parsed actions [Compress]
+{ConfigFile:cp.conf Compress:{Profile:my.profile Skip:true NoFlag: DryRun:{} ZipFolder:{FolderName:} ZipFile:{FileName:defaultzip.file}} Extract:{InputFile:} Help:{}}
 
- .\test.exe -name tom -addr 2001:dead::beef -starttime "2023 12 Dec 11:22"
-{Addr:2001:dead::beef Name:tom StartTime:2023-12-12 11:22:00 +0000 UTC Max:15}
+.\cptool.exe -configfile cp.conf compress dryrun
+parsed actions [Compress DryRun]
+{ConfigFile:cp.conf Compress:{Profile: Skip:false NoFlag: DryRun:{} ZipFolder:{FolderName:} ZipFile:{FileName:defaultzip.file}} Extract:{InputFile:} Help:{}}
 
-.\test.exe -name tom -addr 2001:dead::beef -starttime "2023 12 Dec 11:22" -max 2C
-{Addr:2001:dead::beef Name:tom StartTime:2023-12-12 11:22:00 +0000 UTC Max:44}
 ```
+
+
 
 ## Supported Types
 Base:
@@ -118,16 +109,9 @@ type Outer struct {
 ```
 
 ## Flag Naming
-By default, the name of created flag is the lowercase of struct field name, if the the field is in a sub-struct, then it is parent_field_name+field_name.
-
+By default, the name of created flag is the lowercase of struct field name.
 Optionally a renaming function could be supplied when creating the `Filler`, myflags uses the renaming function returned string as the flag name.
 
-
-## Struct Field Tag
-myflags support following optional struct field tags:
-
-- "alias": override generated name as described above
-- "skipflag": skip the field for flag 
 
 
 ## Extension

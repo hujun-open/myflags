@@ -1,9 +1,12 @@
 package myflags
 
 import (
+	"bytes"
 	"encoding"
+	"errors"
 	"flag"
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 )
@@ -19,14 +22,26 @@ type encodingTextMarshaler interface {
 type RenameFunc func(parent, name string) string
 
 // DefaultRenamer is the default renaming function,
-// it is strings.ToLower(prefix + name)
+// it is strings.ToLower(name)
 func DefaultRenamer(parent, name string) string {
-	return strings.ToLower(parent + name)
+	return strings.ToLower(name)
 }
 
-// Filler could fill a flagset with a struct with Fill() method
+const (
+	//default flag.ErrorHandling
+	DefaultErrHandle = flag.ExitOnError
+)
+
+// Filler auto-generates one or multiple flag.FlagSet based on an input struct
 type Filler struct {
-	renamer RenameFunc
+	fsMap                map[string]*Filler //child fillers, key is the action name
+	orderList            []string
+	fs                   *flag.FlagSet
+	errHandle            flag.ErrorHandling
+	optList              []FillerOption
+	usage                string //this is the usage string for for overall filler
+	renamer              RenameFunc
+	translatedActNameMap map[string]string //key is the transalted action name, val is the original field name
 }
 
 // FillerOption is an option when creating new Filler
@@ -39,29 +54,52 @@ func WithRenamer(r RenameFunc) FillerOption {
 	}
 }
 
+// WithFlagErrHandling returns a FillerOption thats specifies the flag.ErrorHandling
+func WithFlagErrHandling(h flag.ErrorHandling) FillerOption {
+	return func(filler *Filler) {
+		filler.errHandle = h
+	}
+}
+
 // NewFiller creates a new Filler,
+// fsname is the name for flagset, usage is the overall usage introduction.
 // optionally, a list of FillerOptions could be specified.
-func NewFiller(options ...FillerOption) *Filler {
+func NewFiller(fsname, usage string, options ...FillerOption) *Filler {
 	r := &Filler{
-		renamer: DefaultRenamer,
+		errHandle: DefaultErrHandle,
+		renamer:   DefaultRenamer,
 	}
 	for _, o := range options {
 		o(r)
 	}
+	r.fsMap = make(map[string]*Filler)
+	r.translatedActNameMap = make(map[string]string)
+	r.fs = flag.NewFlagSet(fsname, r.errHandle)
+	r.fs.Usage = r.Usage
+	r.orderList = []string{}
+	r.usage = usage
+	r.optList = options
+
+	return r
+}
+
+func newInheritFiller(father *Filler, fsname, ousage string) *Filler {
+	r := NewFiller(fsname, ousage, father.optList...)
 	return r
 }
 
 var textEncodingInt = reflect.TypeOf((*encodingTextMarshaler)(nil)).Elem()
 
 const (
+	//SkipTag is struct field tag used to skip flag generation
 	SkipTag = "skipflag"
 )
 
-// Fill fs with struct in
-func (filler *Filler) Fill(fs *flag.FlagSet, in any) error {
+// Fill filler with struct in
+func (filler *Filler) Fill(in any) error {
 	t := reflect.TypeOf(in)
 	if t.Kind() == reflect.Ptr && t.Elem().Kind() == reflect.Struct {
-		return filler.walk(fs, reflect.ValueOf(in), "", "")
+		return filler.walk(reflect.ValueOf(in), "", "")
 	} else {
 		return fmt.Errorf("only support a pointer to struct, but got %v", t)
 	}
@@ -112,7 +150,8 @@ func isFlagSupportedKind(k reflect.Kind) bool {
 }
 
 // in must be a pointer to struct
-func (filler *Filler) walk(fs *flag.FlagSet, inV reflect.Value, nameprefix, usage string) error {
+func (filler *Filler) walk(inV reflect.Value, nameprefix, usage string) error {
+	fs := filler.fs
 	var err error
 	if inV.Kind() != reflect.Pointer {
 		inV = inV.Addr()
@@ -144,13 +183,15 @@ func (filler *Filler) walk(fs *flag.FlagSet, inV reflect.Value, nameprefix, usag
 			fieldT := inT.Elem().Field(i)
 			if fieldT.IsExported() {
 				//only handle exported field
-				//get usage
+				//get tags
 				if _, exists := fieldT.Tag.Lookup(SkipTag); exists {
 					continue
 				}
 				usage, _ := fieldT.Tag.Lookup("usage")
 				fname := fieldT.Name
-				fname = filler.renamer(nameprefix, fname)
+				if filler.renamer != nil {
+					fname = filler.renamer(nameprefix, fname)
+				}
 				alias, _ := fieldT.Tag.Lookup("alias")
 				if alias != "" {
 					fname = alias
@@ -215,7 +256,26 @@ func (filler *Filler) walk(fs *flag.FlagSet, inV reflect.Value, nameprefix, usag
 					}
 
 				}
-				err = filler.walk(fs, field, fname, usage)
+				//check if the field is a struct
+				if fieldT.Type.Kind() == reflect.Struct ||
+					(fieldT.Type.Kind() == reflect.Pointer && fieldT.Type.Elem().Kind() == reflect.Struct) {
+					if _, ok := filler.fsMap[fname]; ok {
+						return fmt.Errorf("found struct type field with duplicate name %v", fname)
+					}
+					filler.fsMap[fname] = newInheritFiller(filler, fname, usage)
+					filler.translatedActNameMap[fname] = fieldT.Name
+					filler.orderList = append(filler.orderList, fname)
+
+					// flag.NewFlagSet(fieldT.Name, filler.errHandle)
+
+					err = filler.fsMap[fname].walk(field, fname, usage)
+					if err != nil {
+						return err
+					}
+					continue
+				}
+
+				err = filler.walk(field, fname, usage)
 				if err != nil {
 					return err
 				}
@@ -223,4 +283,138 @@ func (filler *Filler) walk(fs *flag.FlagSet, inV reflect.Value, nameprefix, usag
 		}
 	}
 	return nil
+}
+
+var ErrInvalidAction = errors.New("unknown action")
+
+// like, PrseArgs, use os.Args as input
+func (filler *Filler) Parse() ([]string, error) {
+	return filler.ParseArgs(os.Args[1:])
+}
+
+func (filler *Filler) getNextActPosState(args []string) (int, error) {
+	const (
+		stateArgDone = iota
+		stateInArg
+	)
+	state := stateArgDone
+	var hasdash bool
+	for i, arg := range args {
+		hasdash = strings.HasPrefix(arg, "-")
+		switch state {
+		case stateArgDone:
+			if !hasdash {
+				if _, ok := filler.fsMap[arg]; ok {
+					return i, nil
+				} else {
+					return -1, fmt.Errorf(`found unrecognized action "%v"`, arg)
+				}
+			} else {
+				//has -
+				state = stateInArg
+			}
+		case stateInArg:
+			if !hasdash {
+				state = stateArgDone
+			} else {
+				// has -
+				// this could be current arg is bool "like -arg1 -arg2"
+			}
+
+		}
+
+	}
+	return -1, nil
+}
+
+// ParseArgs parse the args, return parsed actions as a slice of string, each is a parsed action name,
+// note: unrecognized action and its following arguments in the args will be ignored without returning error
+func (filler *Filler) ParseArgs(args []string) ([]string, error) {
+	parsedActions := []string{}
+	var nextActPos int = -1
+	var nextAct string
+	var err error
+	errHanlder := func(inerr error) {
+		if inerr != nil {
+			switch filler.errHandle {
+			case flag.ExitOnError:
+				fmt.Println("-----?", err)
+				os.Exit(2)
+			case flag.PanicOnError:
+				panic(err)
+			}
+		}
+
+	}
+	nextActPos, err = filler.getNextActPosState(args)
+	if err != nil {
+		errHanlder(err)
+		return nil, err
+	}
+	if nextActPos >= 0 {
+		nextAct = args[nextActPos]
+	}
+	endPos := len(args)
+	if nextActPos >= 0 {
+		endPos = nextActPos
+	}
+	err = filler.fs.Parse(args[:endPos])
+	if err != nil {
+		return nil, err
+	}
+	if nextActPos >= 0 {
+		if nextFiller, ok := filler.fsMap[nextAct]; !ok {
+			err = fmt.Errorf("%w: %v", ErrInvalidAction, nextAct)
+			errHanlder(err)
+			return nil, err
+		} else {
+			parsedActions = append(parsedActions, filler.translatedActNameMap[nextAct])
+			acts, err := nextFiller.ParseArgs(args[endPos+1:])
+			if err != nil {
+				errHanlder(err)
+				return nil, err
+			}
+			parsedActions = append(parsedActions, acts...)
+		}
+	}
+	return parsedActions, nil
+}
+
+// GetActUsage returns filler's child action usage specified by actname,
+// actname should be the field name before renaming;
+// return "" if not found
+func (filler *Filler) GetActUsage(actname string) string {
+	for rn, n := range filler.translatedActNameMap {
+		if n == actname {
+			return filler.fsMap[rn].UsageStr("")
+		}
+	}
+	return ""
+}
+
+// UsageStr return a usage string for the filler and its descendant fillers (a.k.a actions)
+func (filler *Filler) UsageStr(prefix string) string {
+	step := "  "
+	indent := prefix + step
+	buf := new(bytes.Buffer)
+	fmt.Fprintln(buf, filler.usage)
+	filler.fs.VisitAll(func(f *flag.Flag) {
+		fmt.Fprintf(buf, "%v- %v: %v\n", indent, f.Name,
+			// reflect.Indirect(reflect.ValueOf(f.Value)).Kind(),
+			f.Usage)
+		if f.DefValue != "" {
+			fmt.Fprintf(buf, "%v\tdefault:%v\n", indent, f.DefValue)
+		}
+	})
+	for _, childname := range filler.orderList {
+		child := filler.fsMap[childname]
+		fmt.Fprintf(buf, "%v= %v: ", indent, childname)
+		fmt.Fprint(buf, child.UsageStr(indent))
+	}
+	return buf.String()
+}
+
+// Usage print the string returned by UsageStr
+func (filler *Filler) Usage() {
+	fmt.Println(filler.UsageStr(""))
 }

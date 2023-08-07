@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/hujun-open/myflags"
+	"golang.org/x/exp/slices"
 )
 
 type intTyps interface {
@@ -57,9 +58,12 @@ type Sub struct {
 
 type TestStruct struct {
 	Sub
-	Sub1   Sub
-	Nested struct {
-		NestCounter *uint32 `base:"16"`
+	Sub1 Sub
+	Act1 struct {
+		Act1Counter *uint32 `base:"16"`
+		Act11       struct {
+			Act11Counter int
+		}
 	}
 	Addr           netip.Addr
 	PAddr          *netip.Addr
@@ -70,27 +74,34 @@ type TestStruct struct {
 	AddrNPSlice    []netip.Addr `alias:"anps"`
 	Time           time.Time    `layout:"2006 02 Jan 15:04"`
 	SNL            SubnoList
-	ShouldSkipAddr netip.Addr `skipmarshal:""`
+	ShouldSkipAddr netip.Addr `skipflag:""`
 }
 
 type testCase struct {
 	input          TestStruct
+	errh           flag.ErrorHandling
 	Args           []string
 	expectedResult TestStruct
+	expectedActs   []string
 	shouldFail     bool
 }
 
 func (tc *testCase) do(t *testing.T) error {
-	fflag := flag.ExitOnError
-	if tc.shouldFail {
-		fflag = flag.ContinueOnError
-	}
-	fs := flag.NewFlagSet("test", fflag)
-	filler := myflags.NewFiller()
-	filler.Fill(fs, &tc.input)
-	err := fs.Parse(tc.Args)
+	fflag := tc.errh
+	// if tc.shouldFail {
+	// 	fflag = flag.ContinueOnError
+	// }
+	filler := myflags.NewFiller(
+		"test", "", myflags.WithFlagErrHandling(fflag),
+	)
+	filler.Fill(&tc.input)
+
+	parsedActs, err := filler.ParseArgs(tc.Args)
 	if err != nil {
 		return err
+	}
+	if !slices.Equal(parsedActs, tc.expectedActs) {
+		return fmt.Errorf("parsed acts %v is different from expected acts %v", parsedActs, tc.expectedActs)
 	}
 	if !deepEqual(tc.input, tc.expectedResult) {
 		return fmt.Errorf("\n%+v is different from expected:\n%+v", myflags.PrettyStruct(tc.input, ""), myflags.PrettyStruct(tc.expectedResult, ""))
@@ -164,55 +175,63 @@ func TestMyflags(t *testing.T) {
 		},
 		{ //case 7
 			input: TestStruct{},
-			Args:  []string{"-nestednestcounter", "99"},
+			Args:  []string{"act1", "-act1counter", "99"},
 			expectedResult: TestStruct{
-				Nested: struct {
-					NestCounter *uint32 "base:\"16\""
+				Act1: struct {
+					Act1Counter *uint32 `base:"16"`
+					Act11       struct {
+						Act11Counter int
+					}
 				}{
-					NestCounter: createInt[uint32](0x99),
+					Act1Counter: createInt[uint32](0x99),
 				},
 			},
+			expectedActs: []string{"Act1"},
 		},
 		{ //case 8
 			input: TestStruct{},
-			Args:  []string{"-subsubpointercounter", "100", "-subsubcounterslice", "3,4,5"},
+			Args:  []string{"sub", "-subpointercounter", "100", "-subcounterslice", "3,4,5"},
 			expectedResult: TestStruct{
 				Sub: Sub{
 					SubPointerCounter: createInt[uint32](100),
 					SubCounterSlice:   []*uint32{createInt[uint32](3), createInt[uint32](4), createInt[uint32](5)},
 				},
 			},
+			expectedActs: []string{"Sub"},
 		},
 		{ //case 9
 			input: TestStruct{},
-			Args:  []string{"-subsubfloat64", "100.1"},
+			Args:  []string{"sub", "-subfloat64", "100.1"},
 			expectedResult: TestStruct{
 				Sub: Sub{
 					SubFloat64: 100.1,
 				},
 			},
+			expectedActs: []string{"Sub"},
 		},
 
 		{ //case 10
 			input: TestStruct{},
-			Args:  []string{"-sub1subpointercounter", "100", "-sub1subcounterslice", "3,4,5"},
+			Args:  []string{"sub1", "-subpointercounter", "100", "-subcounterslice", "3,4,5"},
 			expectedResult: TestStruct{
 				Sub1: Sub{
 					SubPointerCounter: createInt[uint32](100),
 					SubCounterSlice:   []*uint32{createInt[uint32](3), createInt[uint32](4), createInt[uint32](5)},
 				},
 			},
+			expectedActs: []string{"Sub1"},
 		},
 		{ //case 11
 			input: TestStruct{},
-			Args:  []string{"-sub1subpointercounter", "100", "-sub1subcounterslice", "5,4,3"},
+			Args:  []string{"sub1", "-subpointercounter", "100", "-subcounterslice", "5,4,3"},
 			expectedResult: TestStruct{
 				Sub1: Sub{
 					SubPointerCounter: createInt[uint32](100),
 					SubCounterSlice:   []*uint32{createInt[uint32](3), createInt[uint32](4), createInt[uint32](5)},
 				},
 			},
-			shouldFail: true,
+			expectedActs: []string{"Sub1"},
+			shouldFail:   true,
 		},
 		{ //case 12
 			input: TestStruct{},
@@ -256,6 +275,51 @@ func TestMyflags(t *testing.T) {
 			},
 			shouldFail: true,
 		},
+		{ //case 16
+			input: TestStruct{},
+			Args:  []string{"act1", "-act1counter", "99", "act11", "-act11counter", "199"},
+			expectedResult: TestStruct{
+				Act1: struct {
+					Act1Counter *uint32 `base:"16"`
+					Act11       struct {
+						Act11Counter int
+					}
+				}{
+					Act1Counter: createInt[uint32](0x99),
+					Act11: struct{ Act11Counter int }{
+						Act11Counter: 199,
+					},
+				},
+			},
+			expectedActs: []string{"Act1", "Act11"},
+		},
+		{ //case 17
+			input: TestStruct{},
+			Args:  []string{"act1", "-act1counter", "99", "act121", "-act1counter", "199"},
+			expectedResult: TestStruct{
+				Act1: struct {
+					Act1Counter *uint32 `base:"16"`
+					Act11       struct {
+						Act11Counter int
+					}
+				}{
+					Act1Counter: createInt[uint32](0x99),
+					Act11: struct{ Act11Counter int }{
+						Act11Counter: 199,
+					},
+				},
+			},
+			expectedActs: []string{"Act1"},
+			shouldFail:   true,
+		},
+		{ //case 18, should fail
+			input: TestStruct{},
+			Args:  []string{"-xxxxx", "1.1.1.1,1.1.1.2"},
+			expectedResult: TestStruct{
+				AddrSlice: []*netip.Addr{createPAddr("1.1.1.1")},
+			},
+			shouldFail: true,
+		},
 	}
 
 	for i, c := range caseList {
@@ -270,6 +334,10 @@ func TestMyflags(t *testing.T) {
 			} else {
 				t.Logf("case %d failed as expected, %v", i, err)
 				continue
+			}
+		} else {
+			if c.shouldFail {
+				t.Fatalf("case %d should fail but succeed", i)
 			}
 		}
 		t.Logf("testing case %d successfully finished", i)
