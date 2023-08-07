@@ -25,8 +25,7 @@ Using myflags is straight forward:
 3. call `flag.Parse()`
 
 Following is an example:
-```
-```
+https://github.com/hujun-open/myflags/blob/7f21e0206f4fbc63e1b684b455f0f98c85c72dda/example/main.go#L1-L45
 the created flags:
 ```
 .\cptool.exe -?
