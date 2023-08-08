@@ -14,7 +14,8 @@ Following struct field tags are supported:
 
 - skipflag: skip the field for flagging
 - alias: use the specified alias as the name of the parameter
-- usage: the usage string of the parameter 
+- usage: the usage string of the parameter
+- action: this field is an action 
 
 
 ## Quick Start 
@@ -108,7 +109,8 @@ type Outer struct {
 ```
 
 ## Flag Naming
-By default, the name of created flag is the lowercase of struct field name.
+By default, the name of created flag is the lowercase of struct field name, in case the field is part of sub-struct, and parent struct is NOT an action, then the name of created flag is "<parent_field_name>-<field_name>";
+ 
 Optionally a renaming function could be supplied when creating the `Filler`, myflags uses the renaming function returned string as the flag name.
 
 

@@ -12,18 +12,18 @@ type ZipCLI struct {
 		Profile   string
 		Skip      bool     `alias:"s"`   //use "s" as the parameter name
 		NoFlag    string   `skipflag:""` //ignore this field for flagging
-		DryRun    struct{} `usage:"dry run, doesn't actually create any file"`
+		DryRun    struct{} `usage:"dry run, doesn't actually create any file" action:""`
 		ZipFolder struct {
 			FolderName string `alias:"folder" usage:"specify folder name"`
-		} `usage:"zip a folder"`
+		} `usage:"zip a folder" action:""`
 		ZipFile struct {
 			FileName string `alias:"f" usage:"specify file name"`
-		} `usage:"zip a file"`
-	} `usage:"to compress things"`
+		} `usage:"zip a file" action:""`
+	} `usage:"to compress things" action:""`
 	Extract struct {
 		InputFile string `usage:"input zip file"`
-	} `usage:"to unzip things"`
-	Help struct{} `usage:"help"`
+	} `usage:"to unzip things" action:""`
+	Help struct{} `usage:"help" action:""`
 }
 
 func main() {

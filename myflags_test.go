@@ -58,13 +58,13 @@ type Sub struct {
 
 type TestStruct struct {
 	Sub
-	Sub1 Sub
+	Sub1 Sub `action:""`
 	Act1 struct {
 		Act1Counter *uint32 `base:"16"`
 		Act11       struct {
 			Act11Counter int
-		}
-	}
+		} `action:""`
+	} `action:""`
 	Addr           netip.Addr
 	PAddr          *netip.Addr
 	BoolVar        bool
@@ -181,7 +181,7 @@ func TestMyflags(t *testing.T) {
 					Act1Counter *uint32 `base:"16"`
 					Act11       struct {
 						Act11Counter int
-					}
+					} `action:""`
 				}{
 					Act1Counter: createInt[uint32](0x99),
 				},
@@ -190,24 +190,24 @@ func TestMyflags(t *testing.T) {
 		},
 		{ //case 8
 			input: TestStruct{},
-			Args:  []string{"sub", "-subpointercounter", "100", "-subcounterslice", "3,4,5"},
+			Args:  []string{"-sub-subpointercounter", "100", "-sub-subcounterslice", "3,4,5"},
 			expectedResult: TestStruct{
 				Sub: Sub{
 					SubPointerCounter: createInt[uint32](100),
 					SubCounterSlice:   []*uint32{createInt[uint32](3), createInt[uint32](4), createInt[uint32](5)},
 				},
 			},
-			expectedActs: []string{"Sub"},
+			expectedActs: []string{},
 		},
 		{ //case 9
 			input: TestStruct{},
-			Args:  []string{"sub", "-subfloat64", "100.1"},
+			Args:  []string{"-sub-subfloat64", "100.1"},
 			expectedResult: TestStruct{
 				Sub: Sub{
 					SubFloat64: 100.1,
 				},
 			},
-			expectedActs: []string{"Sub"},
+			expectedActs: []string{},
 		},
 
 		{ //case 10
@@ -283,7 +283,7 @@ func TestMyflags(t *testing.T) {
 					Act1Counter *uint32 `base:"16"`
 					Act11       struct {
 						Act11Counter int
-					}
+					} `action:""`
 				}{
 					Act1Counter: createInt[uint32](0x99),
 					Act11: struct{ Act11Counter int }{
@@ -301,7 +301,7 @@ func TestMyflags(t *testing.T) {
 					Act1Counter *uint32 `base:"16"`
 					Act11       struct {
 						Act11Counter int
-					}
+					} `action:""`
 				}{
 					Act1Counter: createInt[uint32](0x99),
 					Act11: struct{ Act11Counter int }{

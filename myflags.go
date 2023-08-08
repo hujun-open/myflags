@@ -18,12 +18,17 @@ type encodingTextMarshaler interface {
 }
 
 // RenameFunc is the function to rename the flag for a struct field,
-// name is the field name, while parent is the parent struct field name
-type RenameFunc func(parent, name string) string
+// name is the field name, while parent is the parent struct field name,
+// isAct is true when parent is an action
+type RenameFunc func(parent, name string, isAct bool) string
 
 // DefaultRenamer is the default renaming function,
-// it is strings.ToLower(name)
-func DefaultRenamer(parent, name string) string {
+// it is parent + "-" + name when isAct is true;
+// otherwise return lower case of name
+func DefaultRenamer(parent, name string, isAct bool) string {
+	if parent != "" && !isAct {
+		return strings.ToLower(parent + "-" + name)
+	}
 	return strings.ToLower(name)
 }
 
@@ -91,15 +96,21 @@ func newInheritFiller(father *Filler, fsname, ousage string) *Filler {
 var textEncodingInt = reflect.TypeOf((*encodingTextMarshaler)(nil)).Elem()
 
 const (
-	//SkipTag is struct field tag used to skip flag generation
+	//SkipTag is the struct field tag used to skip flag generation
 	SkipTag = "skipflag"
+	//AliasTag is the struct field tag used to specify the parameter name iso field name
+	AliasTag = "alias"
+	//UsageTag is the struct field tag used to specify the usage of the field
+	UsageTag = "usage"
+	//ActTag is the struct field tag used to specify the field is an action
+	ActTag = "action"
 )
 
 // Fill filler with struct in
 func (filler *Filler) Fill(in any) error {
 	t := reflect.TypeOf(in)
 	if t.Kind() == reflect.Ptr && t.Elem().Kind() == reflect.Struct {
-		return filler.walk(reflect.ValueOf(in), "", "")
+		return filler.walk(reflect.ValueOf(in), "", "", false)
 	} else {
 		return fmt.Errorf("only support a pointer to struct, but got %v", t)
 	}
@@ -150,7 +161,7 @@ func isFlagSupportedKind(k reflect.Kind) bool {
 }
 
 // in must be a pointer to struct
-func (filler *Filler) walk(inV reflect.Value, nameprefix, usage string) error {
+func (filler *Filler) walk(inV reflect.Value, nameprefix, usage string, isAct bool) error {
 	fs := filler.fs
 	var err error
 	if inV.Kind() != reflect.Pointer {
@@ -187,12 +198,12 @@ func (filler *Filler) walk(inV reflect.Value, nameprefix, usage string) error {
 				if _, exists := fieldT.Tag.Lookup(SkipTag); exists {
 					continue
 				}
-				usage, _ := fieldT.Tag.Lookup("usage")
+				usage, _ := fieldT.Tag.Lookup(UsageTag)
 				fname := fieldT.Name
 				if filler.renamer != nil {
-					fname = filler.renamer(nameprefix, fname)
+					fname = filler.renamer(nameprefix, fname, isAct)
 				}
-				alias, _ := fieldT.Tag.Lookup("alias")
+				alias, _ := fieldT.Tag.Lookup(AliasTag)
 				if alias != "" {
 					fname = alias
 				}
@@ -259,23 +270,24 @@ func (filler *Filler) walk(inV reflect.Value, nameprefix, usage string) error {
 				//check if the field is a struct
 				if fieldT.Type.Kind() == reflect.Struct ||
 					(fieldT.Type.Kind() == reflect.Pointer && fieldT.Type.Elem().Kind() == reflect.Struct) {
-					if _, ok := filler.fsMap[fname]; ok {
-						return fmt.Errorf("found struct type field with duplicate name %v", fname)
-					}
-					filler.fsMap[fname] = newInheritFiller(filler, fname, usage)
-					filler.translatedActNameMap[fname] = fieldT.Name
-					filler.orderList = append(filler.orderList, fname)
+					if _, ok := fieldT.Tag.Lookup(ActTag); ok {
+						if _, ok := filler.fsMap[fname]; ok {
+							return fmt.Errorf("found struct type field with duplicate name %v", fname)
+						}
+						filler.fsMap[fname] = newInheritFiller(filler, fname, usage)
+						filler.translatedActNameMap[fname] = fieldT.Name
+						filler.orderList = append(filler.orderList, fname)
 
-					// flag.NewFlagSet(fieldT.Name, filler.errHandle)
+						// flag.NewFlagSet(fieldT.Name, filler.errHandle)
 
-					err = filler.fsMap[fname].walk(field, fname, usage)
-					if err != nil {
-						return err
+						err = filler.fsMap[fname].walk(field, fname, usage, true)
+						if err != nil {
+							return err
+						}
+						continue
 					}
-					continue
 				}
-
-				err = filler.walk(field, fname, usage)
+				err = filler.walk(field, fname, usage, false)
 				if err != nil {
 					return err
 				}
@@ -327,8 +339,7 @@ func (filler *Filler) getNextActPosState(args []string) (int, error) {
 	return -1, nil
 }
 
-// ParseArgs parse the args, return parsed actions as a slice of string, each is a parsed action name,
-// note: unrecognized action and its following arguments in the args will be ignored without returning error
+// ParseArgs parse the args, return parsed actions as a slice of string, each is a parsed action name
 func (filler *Filler) ParseArgs(args []string) ([]string, error) {
 	parsedActions := []string{}
 	var nextActPos int = -1
