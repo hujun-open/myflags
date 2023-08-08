@@ -117,6 +117,11 @@ func (filler *Filler) Fill(in any) error {
 
 }
 
+// GetFlagset returns the flagset used by the filler
+func (filler *Filler) GetFlagset() *flag.FlagSet {
+	return filler.fs
+}
+
 func setStandardFlagType(fs *flag.FlagSet, ref reflect.Value, name, usage string) {
 	switch ref.Elem().Kind() {
 	case reflect.String:
