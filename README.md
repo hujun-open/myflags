@@ -120,3 +120,5 @@ New type could be supported via `myflags.Register`, which takes a variable imple
 
 Check [time.go](time.go), [inttype.go](inttype.go) for examples.
 
+## Bool
+myflags use standard Golang module `flag`, [which doesn't support "-flag x" format for bool](https://pkg.go.dev/flag). using "-flag x" for bool could cause silent failure that input parameters after bool don't get parsed.
