@@ -175,7 +175,7 @@ func TestMyflags(t *testing.T) {
 		},
 		{ //case 7
 			input: TestStruct{},
-			Args:  []string{"act1", "-act1counter", "99"},
+			Args:  []string{"act1", "-act1counter", "0x99"},
 			expectedResult: TestStruct{
 				Act1: struct {
 					Act1Counter *uint32 `base:"16"`
@@ -277,7 +277,7 @@ func TestMyflags(t *testing.T) {
 		},
 		{ //case 16
 			input: TestStruct{},
-			Args:  []string{"act1", "-act1counter", "99", "act11", "-act11counter", "199"},
+			Args:  []string{"act1", "-act1counter", "0x99", "act11", "-act11counter", "199"},
 			expectedResult: TestStruct{
 				Act1: struct {
 					Act1Counter *uint32 `base:"16"`
@@ -319,6 +319,21 @@ func TestMyflags(t *testing.T) {
 				AddrSlice: []*netip.Addr{createPAddr("1.1.1.1")},
 			},
 			shouldFail: true,
+		},
+		{ //case 18, testing 0x
+			input: TestStruct{},
+			Args:  []string{"act1", "-act1counter", "0x99"},
+			expectedResult: TestStruct{
+				Act1: struct {
+					Act1Counter *uint32 `base:"16"`
+					Act11       struct {
+						Act11Counter int
+					} `action:""`
+				}{
+					Act1Counter: createInt[uint32](0x99),
+				},
+			},
+			expectedActs: []string{"Act1"},
 		},
 	}
 

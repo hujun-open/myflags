@@ -9,6 +9,7 @@ import (
 type ZipCLI struct {
 	ConfigFile string `usage:"working profile"`
 	Compress   struct {
+		Loop      uint `base:"16" usage:"number of compress iterations"`
 		Profile   string
 		Skip      bool     `alias:"s"`   //use "s" as the parameter name
 		NoFlag    string   `skipflag:""` //ignore this field for flagging
@@ -28,9 +29,11 @@ type ZipCLI struct {
 
 func main() {
 	filler := myflags.NewFiller("zipcli", "a zip command")
+	//some default values
 	zipcli := ZipCLI{
 		ConfigFile: "default.conf",
 	}
+	zipcli.Compress.Loop = 0x20
 	zipcli.Compress.ZipFile.FileName = "defaultzip.file"
 	err := filler.Fill(&zipcli)
 	if err != nil {

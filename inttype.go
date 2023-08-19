@@ -30,28 +30,33 @@ func (i *intType) ToStr(in any, tag reflect.StructTag) string {
 	fmtstr := "%d"
 	switch strings.TrimSpace(base) {
 	case "2":
-		fmtstr = "%b"
+		fmtstr = "0b%b"
 	case "8":
-		fmtstr = "%O"
+		fmtstr = "0o%O"
 	case "16":
-		fmtstr = "%x"
+		fmtstr = "0x%x"
 	}
 	return fmt.Sprintf(fmtstr, in)
 }
 
 func (i *intType) FromStr(s string, tag reflect.StructTag) (any, error) {
-	base, _ := tag.Lookup("base")
-	baseN := 10
-	switch strings.TrimSpace(base) {
-	case "2":
-		baseN = 2
-	case "8":
-		baseN = 8
-	case "16":
-		baseN = 16
-	}
+	// base, foundTag := tag.Lookup("base")
+	// // baseN := 10
+	// // switch strings.TrimSpace(base) {
+	// // case "10":
+	// // case "2":
+	// // 	baseN = 2
+	// // case "8":
+	// // 	baseN = 8
+	// // case "16":
+	// // 	baseN = 16
+	// // default:
+	// // 	if foundTag {
+	// // 		return nil, fmt.Errorf("unsupported base %v", base)
+	// // 	}
+	// // }
 	if !i.isUint {
-		n, err := strconv.ParseInt(strings.TrimSpace(s), baseN, i.len)
+		n, err := strconv.ParseInt(strings.TrimSpace(s), 0, i.len)
 		if err != nil {
 			return nil, err
 		}
@@ -69,7 +74,7 @@ func (i *intType) FromStr(s string, tag reflect.StructTag) (any, error) {
 		}
 
 	} else {
-		n, err := strconv.ParseUint(strings.TrimSpace(s), baseN, i.len)
+		n, err := strconv.ParseUint(strings.TrimSpace(s), 0, i.len)
 		if err != nil {
 			return nil, err
 		}

@@ -30,11 +30,12 @@ https://github.com/hujun-open/myflags/blob/2fd27463cabdc368b87aecc7addbb42f5535a
 the created flags:
 ```
 .\cptool.exe -?
-flag provided but not defined: -?
 a zip command
   - configfile: working profile
         default:default.conf
   = compress: to compress things
+    - loop: number of compress iterations
+        default:0x20
     - profile:
     - s:
         default:false
@@ -47,17 +48,16 @@ a zip command
   = extract: to unzip things
     - inputfile: input zip file
   = help: help
-
 ```
 some parsing results:
 ```
 .\cptool.exe -configfile cp.conf compress -profile my.profile -s zipfilder -folder ./bigfolder/
 parsed actions [Compress]
-{ConfigFile:cp.conf Compress:{Profile:my.profile Skip:true NoFlag: DryRun:{} ZipFolder:{FolderName:} ZipFile:{FileName:defaultzip.file}} Extract:{InputFile:} Help:{}}
+{ConfigFile:cp.conf Compress:{Loop:32 Profile:my.profile Skip:true NoFlag: DryRun:{} ZipFolder:{FolderName:} ZipFile:{FileName:defaultzip.file}} Extract:{InputFile:} Help:{}}
 
-.\cptool.exe -configfile cp.conf compress dryrun
+.\cptool.exe -configfile cp.conf compress -loop 100 dryrun
 parsed actions [Compress DryRun]
-{ConfigFile:cp.conf Compress:{Profile: Skip:false NoFlag: DryRun:{} ZipFolder:{FolderName:} ZipFile:{FileName:defaultzip.file}} Extract:{InputFile:} Help:{}}
+{ConfigFile:cp.conf Compress:{Loop:100 Profile: Skip:false NoFlag: DryRun:{} ZipFolder:{FolderName:} ZipFile:{FileName:defaultzip.file}} Extract:{InputFile:} Help:{}}
 
 ```
 
