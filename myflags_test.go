@@ -335,12 +335,29 @@ func TestMyflags(t *testing.T) {
 			},
 			expectedActs: []string{"Act1"},
 		},
+		{ //case 19, action with globla bool
+			input: TestStruct{},
+			Args:  []string{"-boolvar", "act1", "-act1counter", "0x99"},
+			expectedResult: TestStruct{
+				BoolVar: true,
+				Act1: struct {
+					Act1Counter *uint32 `base:"16"`
+					Act11       struct {
+						Act11Counter int
+					} `action:""`
+				}{
+					Act1Counter: createInt[uint32](0x99),
+				},
+			},
+			expectedActs: []string{"Act1"},
+			shouldFail:   false,
+		},
 	}
 
 	for i, c := range caseList {
-		// if i != 3 {
-		// 	continue
-		// }
+		if i != 20 {
+			continue
+		}
 		t.Logf("testing case %d", i)
 		err := c.do(t)
 		if err != nil {

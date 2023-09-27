@@ -309,6 +309,10 @@ func (filler *Filler) Parse() ([]string, error) {
 	return filler.ParseArgs(os.Args[1:])
 }
 
+type isBoolInt interface {
+	IsBoolFlag() bool
+}
+
 func (filler *Filler) getNextActPosState(args []string) (int, error) {
 	const (
 		stateArgDone = iota
@@ -316,6 +320,7 @@ func (filler *Filler) getNextActPosState(args []string) (int, error) {
 	)
 	state := stateArgDone
 	var hasdash bool
+L1:
 	for i, arg := range args {
 		hasdash = strings.HasPrefix(arg, "-")
 		switch state {
@@ -328,6 +333,29 @@ func (filler *Filler) getNextActPosState(args []string) (int, error) {
 				}
 			} else {
 				//has -
+				//check if it is argname=xxx format
+				_, _, found := strings.Cut(arg[1:], "=")
+				if found {
+					//yes
+					state = stateArgDone
+					continue L1
+				} else {
+					//no,meaing it is just "-argname" check if this is boolvar
+					isBool := false
+					filler.fs.VisitAll(func(f *flag.Flag) {
+						if f.Name == arg[1:] {
+							if s, ok := f.Value.(isBoolInt); ok {
+								if s.IsBoolFlag() {
+									isBool = true
+								}
+							}
+						}
+					})
+					if isBool {
+						state = stateArgDone
+						continue L1
+					}
+				}
 				state = stateInArg
 			}
 		case stateInArg:
