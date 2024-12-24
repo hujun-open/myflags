@@ -1,9 +1,12 @@
 package myflags
 
 import (
-	"flag"
+	// "flag"
 	"fmt"
 	"reflect"
+	"strings"
+
+	flag "github.com/spf13/pflag"
 )
 
 func getTypeName(t reflect.Type) string {
@@ -54,12 +57,17 @@ func (v *simpleType[T]) Set(s string) error {
 	return nil
 }
 
+// implment pflag.Value interface
+func (v *simpleType[T]) Type() string {
+	return getTypeName(reflect.TypeOf(v.val))
+}
+
 // implment flag.Value interface
 func (v *simpleType[T]) IsBoolFlag() bool { return v.isBool }
 
 type factory[T any] struct{}
 
-func (f *factory[T]) process(fs *flag.FlagSet, ref reflect.Value, tag reflect.StructTag, name, usage string) {
+func (f *factory[T]) process(fs *flag.FlagSet, ref reflect.Value, tag reflect.StructTag, name, short, usage string) {
 	// if ref.Type().Elem().Kind()
 	isbool := false
 	if reflect.TypeOf(*new(T)).Kind() == reflect.Bool {
@@ -69,7 +77,11 @@ func (f *factory[T]) process(fs *flag.FlagSet, ref reflect.Value, tag reflect.St
 	conv := globalRegistry.GetViaInterface(ref.Interface())
 	newval := newSimpleType[T](conv.FromStr, conv.ToStr, tag, isbool)
 	newval.SetRef(casted)
-	fs.Var(&newval, name, usage)
+	if strings.TrimSpace(short) == "" {
+		fs.Var(&newval, name, usage)
+	} else {
+		fs.VarP(&newval, name, short, usage)
+	}
 }
 
 func (v *simpleType[T]) SetRef(t *T) {

@@ -2,10 +2,12 @@ package myflags
 
 import (
 	"encoding"
-	"flag"
+	// "flag"
 	"fmt"
 	"reflect"
 	"strings"
+
+	flag "github.com/spf13/pflag"
 )
 
 // this is to support slice and array
@@ -35,6 +37,10 @@ func (list *listType) String() string {
 
 	}
 	return r[:len(r)-1]
+}
+
+func (list *listType) Type() string {
+	return list.val.Type().Name() + " list"
 }
 
 func (list *listType) Set(s string) error {

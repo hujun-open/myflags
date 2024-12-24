@@ -1,8 +1,10 @@
 package myflags
 
 import (
-	"flag"
+	// "flag"
 	"reflect"
+
+	flag "github.com/spf13/pflag"
 )
 
 type RegisteredConverters interface {
@@ -36,7 +38,7 @@ func (r *registry) Register(t string, c RegisteredConverters) {
 	r.list[t] = c
 }
 
-type factoryHandler func(fs *flag.FlagSet, ref reflect.Value, tag reflect.StructTag, name, usage string)
+type factoryHandler func(fs *flag.FlagSet, ref reflect.Value, tag reflect.StructTag, name, short, usage string)
 
 var factoryRegistry = make(map[string]factoryHandler)
 
