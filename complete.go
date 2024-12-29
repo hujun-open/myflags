@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/spf13/cobra"
+	"github.com/hujun-open/cobra"
 )
 
 type ShellType string
@@ -23,7 +23,7 @@ func (filler *Filler) GenCompletionScript(cmd *cobra.Command, args []string) {
 	}
 	switch shell {
 	case ShellBash:
-		err = filler.cobraCMD.GenBashCompletionV2(buf, false)
+		err = filler.GenBashCompletionV2(buf, false)
 		if err != nil {
 			fmt.Printf("failed to generate BASHv2 completion script, %v\n", err)
 			return

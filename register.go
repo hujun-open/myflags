@@ -4,7 +4,7 @@ import (
 	// "flag"
 	"reflect"
 
-	flag "github.com/spf13/pflag"
+	flag "github.com/hujun-open/pflag"
 )
 
 type RegisteredConverters interface {

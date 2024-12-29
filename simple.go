@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"strings"
 
-	flag "github.com/spf13/pflag"
+	flag "github.com/hujun-open/pflag"
 )
 
 func getTypeName(t reflect.Type) string {
@@ -14,6 +14,13 @@ func getTypeName(t reflect.Type) string {
 		t = t.Elem()
 	}
 	return fmt.Sprint(t.PkgPath() + "=>" + t.String())
+}
+
+func getTypeNameForUsage(t reflect.Type) string {
+	if t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	return t.String()
 }
 
 // FromStrFunc is a function convert string s into a specific type T, the tag is the struct field tag, as addtional input.
@@ -59,7 +66,7 @@ func (v *simpleType[T]) Set(s string) error {
 
 // implment pflag.Value interface
 func (v *simpleType[T]) Type() string {
-	return getTypeName(reflect.TypeOf(v.val))
+	return getTypeNameForUsage(reflect.TypeOf(v.val))
 }
 
 // implment flag.Value interface

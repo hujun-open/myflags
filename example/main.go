@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 
+	"github.com/hujun-open/cobra"
 	"github.com/hujun-open/myflags"
-	"github.com/spf13/cobra"
 )
 
 type ZipCLI struct {
@@ -14,18 +14,17 @@ type ZipCLI struct {
 		Profile   string
 		Skip      bool     `alias:"skip"` //use "skip" as the parameter name
 		NoFlag    string   `skipflag:""`  //ignore this field for flagging
-		DryRun    struct{} `usage:"dry run, doesn't actually create any file" action:"" method:"Dry"`
+		DryRun    struct{} `usage:"dry run, doesn't actually create any file" action:"Dry"`
 		ZipFolder struct {
 			FolderName string `alias:"folder" usage:"specify folder name"`
-		} `usage:"zip a folder" action:"" method:"ZipFolder"`
+		} `usage:"zip a folder" action:""`
 		ZipFile struct {
 			FileName string `alias:"f" usage:"specify file name"`
-		} `usage:"zip a file" action:"" method:"ZipFile"`
-	} `usage:"to compress things" action:"" method:"Comp"`
+		} `usage:"zip a file" action:""`
+	} `usage:"to compress things" action:""`
 	Extract struct {
 		InputFile string `usage:"input zip file"`
-	} `usage:"to unzip things" action:"" method:"Extr"`
-	Help struct{} `usage:"help" action:"" method:"H"`
+	} `usage:"to unzip things" action:""`
 }
 
 func (zipcli *ZipCLI) Dry(cmd *cobra.Command, args []string) {
@@ -45,9 +44,6 @@ func (zipcli *ZipCLI) Extr(cmd *cobra.Command, args []string) {
 func (zipcli *ZipCLI) Comp(cmd *cobra.Command, args []string) {
 	fmt.Printf("compress %+v\n", zipcli)
 }
-func (zipcli *ZipCLI) H(cmd *cobra.Command, args []string) {
-	fmt.Printf("help %+v\n", zipcli)
-}
 
 func main() {
 	filler := myflags.NewFiller("cptool", "a zip command")
@@ -61,10 +57,15 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	err = filler.Exec()
+	cmd, err := filler.ExecuteC()
 	if err != nil {
 		panic(err)
 	}
+	if cmd.Flags().Lookup("help").Value.String() == "true" {
+		// --help is called
+		return
+	}
+	fmt.Println("after execute", cmd.Name(), "got called")
 
 	// filler.PrintDebug()
 	// acts, err := filler.Parse()

@@ -2,16 +2,15 @@ package myflags
 
 import (
 	"encoding"
-	"errors"
 
 	// "flag"
 	"fmt"
 	"reflect"
 	"strings"
 
-	flag "github.com/spf13/pflag"
+	flag "github.com/hujun-open/pflag"
 
-	"github.com/spf13/cobra"
+	"github.com/hujun-open/cobra"
 )
 
 // encodingTextMarshaler is the interface includes both encoding.TextMarshaler and encoding.TextUnmarshaler
@@ -42,14 +41,13 @@ const (
 
 // Filler auto-generates one or multiple flag.FlagSet based on an input struct
 type Filler struct {
-	fsMap                map[string]*Filler //child fillers, key is the action name
-	fs                   *flag.FlagSet
-	errHandle            flag.ErrorHandling
-	optList              []FillerOption
-	usage                string //this is the usage string for for overall filler
-	renamer              RenameFunc
-	translatedActNameMap map[string]string //key is the transalted action name, val is the original field name
-	cobraCMD             *cobra.Command
+	*cobra.Command
+	fsMap     map[string]*Filler //child fillers, key is the action name
+	fs        *flag.FlagSet
+	errHandle flag.ErrorHandling
+	optList   []FillerOption
+	usage     string //this is the usage string for for overall filler
+	renamer   RenameFunc
 }
 
 // FillerOption is an option when creating new Filler
@@ -81,11 +79,10 @@ func NewFiller(fsname, usage string, options ...FillerOption) *Filler {
 		o(r)
 	}
 	r.fsMap = make(map[string]*Filler)
-	r.translatedActNameMap = make(map[string]string)
 	r.fs = flag.NewFlagSet(fsname, r.errHandle)
 	r.usage = usage
 	r.optList = options
-	r.cobraCMD = &cobra.Command{
+	r.Command = &cobra.Command{
 		Use:   fsname,
 		Short: usage,
 	}
@@ -93,10 +90,10 @@ func NewFiller(fsname, usage string, options ...FillerOption) *Filler {
 	return r
 }
 
-func newInheritFiller(father *Filler, fsname, ousage string, method runMethod) *Filler {
+func newInheritFiller(father *Filler, fsname, ousage string, method RunMethod) *Filler {
 	r := NewFiller(fsname, ousage, father.optList...)
-	r.cobraCMD.Run = method
-	father.cobraCMD.AddCommand(r.cobraCMD)
+	r.Run = method
+	father.AddCommand(r.Command)
 	return r
 }
 
@@ -111,32 +108,22 @@ const (
 	ShorthandTag = "short"
 	//UsageTag is the struct field tag used to specify the usage of the field
 	UsageTag = "usage"
-	//ActTag is the struct field tag used to specify the field is an action
+	//ActTag is the struct field tag used to specify the field (of type struct) is an action, the value is the name of the method to run
+	//method name is looked up in the field struct first, then in the root struct
 	ActTag = "action"
-	//ActMethodTag is the method name for the action
-	ActMethodTag = "method"
 	//RequiredTag indicate the flag is mandatory required
 	RequiredTag = "required"
 )
 
-type runMethod func(cmd *cobra.Command, args []string)
+// RunMethod is the type of function could be used as cobra.Command.Run
+type RunMethod func(cmd *cobra.Command, args []string)
+
+// DefRunMethod is function that does nothing, it is assigned if value of ActTag is empty string
+var DefRunMethod RunMethod = func(cmd *cobra.Command, args []string) {}
 
 // if last is false, add the new act as first one in orderList
-func (filler *Filler) addNewAct(smallAct, bigAct, usage string, method runMethod, last bool) {
-
-	filler.fsMap[smallAct] = newInheritFiller(filler, smallAct, usage, method)
-	filler.translatedActNameMap[smallAct] = bigAct
-
-}
-
-func (filler *Filler) PrintDebug() {
-	fmt.Println("actions:")
-	if len(filler.fsMap) > 0 {
-		for action, child := range filler.fsMap {
-			fmt.Printf("action:%v\n", action)
-			child.PrintDebug()
-		}
-	}
+func (filler *Filler) addNewAct(act, usage string, method RunMethod) {
+	filler.fsMap[act] = newInheritFiller(filler, act, usage, method)
 }
 
 // Fill filler with struct in
@@ -163,6 +150,7 @@ func (filler *Filler) GetFlagset() *flag.FlagSet {
 }
 
 func setStandardFlagType(fs *flag.FlagSet, ref reflect.Value, name, short, usage string) {
+	// fmt.Println(1111111111111111, name)
 	switch ref.Elem().Kind() {
 	case reflect.String:
 		casted := ref.Interface().(*string)
@@ -201,12 +189,55 @@ func setStandardFlagType(fs *flag.FlagSet, ref reflect.Value, name, short, usage
 		} else {
 			fs.Int64Var(casted, name, *casted, usage)
 		}
+
+	case reflect.Int8:
+		casted := ref.Interface().(*int8)
+		if strings.TrimSpace(short) != "" {
+			fs.Int8VarP(casted, name, short, *casted, usage)
+		} else {
+			fs.Int8Var(casted, name, *casted, usage)
+		}
+	case reflect.Int16:
+		casted := ref.Interface().(*int16)
+		if strings.TrimSpace(short) != "" {
+			fs.Int16VarP(casted, name, short, *casted, usage)
+		} else {
+			fs.Int16Var(casted, name, *casted, usage)
+		}
+	case reflect.Int32:
+		casted := ref.Interface().(*int32)
+		if strings.TrimSpace(short) != "" {
+			fs.Int32VarP(casted, name, short, *casted, usage)
+		} else {
+			fs.Int32Var(casted, name, *casted, usage)
+		}
 	case reflect.Uint64:
 		casted := ref.Interface().(*uint64)
 		if strings.TrimSpace(short) != "" {
 			fs.Uint64VarP(casted, name, short, *casted, usage)
 		} else {
 			fs.Uint64Var(casted, name, *casted, usage)
+		}
+	case reflect.Uint8:
+		casted := ref.Interface().(*uint8)
+		if strings.TrimSpace(short) != "" {
+			fs.Uint8VarP(casted, name, short, *casted, usage)
+		} else {
+			fs.Uint8Var(casted, name, *casted, usage)
+		}
+	case reflect.Uint16:
+		casted := ref.Interface().(*uint16)
+		if strings.TrimSpace(short) != "" {
+			fs.Uint16VarP(casted, name, short, *casted, usage)
+		} else {
+			fs.Uint16Var(casted, name, *casted, usage)
+		}
+	case reflect.Uint32:
+		casted := ref.Interface().(*uint32)
+		if strings.TrimSpace(short) != "" {
+			fs.Uint32VarP(casted, name, short, *casted, usage)
+		} else {
+			fs.Uint32Var(casted, name, *casted, usage)
 		}
 	case reflect.Float32:
 		casted := ref.Interface().(*float32)
@@ -237,11 +268,11 @@ func setTextEncodingType(fs *flag.FlagSet, ref reflect.Value, name, short, usage
 
 func isFlagSupportedKind(k reflect.Kind) bool {
 	switch k {
-	case reflect.Float64, reflect.Float32, reflect.Int,
-		reflect.Int64,
+	case reflect.Float64, reflect.Float32,
+		reflect.Int, reflect.Int64, reflect.Int8, reflect.Int16, reflect.Int32,
 		reflect.String,
-		reflect.Bool, reflect.Uint,
-		reflect.Uint64:
+		reflect.Bool,
+		reflect.Uint, reflect.Uint64, reflect.Uint8, reflect.Uint16, reflect.Uint32:
 		return true
 	}
 	return false
@@ -265,6 +296,14 @@ func getMethod(root, current reflect.Value, name string) reflect.Value {
 
 }
 
+func isSupportedKind(inK reflect.Kind) bool {
+	switch inK {
+	case reflect.Invalid, reflect.Complex64, reflect.Complex128, reflect.Chan, reflect.Func, reflect.Map, reflect.UnsafePointer:
+		return false
+	}
+	return true
+}
+
 // in must be a pointer to struct
 // NOTE: there are following methods to register a flag
 // - setStandardFlagType
@@ -286,24 +325,23 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix, short, usage str
 	ElemK := inV.Elem().Kind()
 	defer func() {
 		if isAct {
-			filler.cobraCMD.PersistentFlags().AddFlagSet(fs)
+			filler.PersistentFlags().AddFlagSet(fs)
 			for _, f := range requiredFlags {
 				cobra.MarkFlagRequired(fs, f)
 			}
 		}
 	}()
 
-	//check if it implements EncodingTextMarshaler inteface
-	if inT.Implements(textEncodingInt) {
-
-		setTextEncodingType(fs, inV, nameprefix, short, usage)
-		return nil
-	}
-	//these are kinds directly supported by flag module
-	if isFlagSupportedKind(ElemK) {
-		setStandardFlagType(fs, inV, nameprefix, short, usage)
-		return nil
-	}
+	// //check if it implements EncodingTextMarshaler inteface
+	// if inT.Implements(textEncodingInt) {
+	// 	setTextEncodingType(fs, inV, nameprefix, short, usage)
+	// 	return nil
+	// }
+	// //these are kinds directly supported by flag module
+	// if isFlagSupportedKind(ElemK) {
+	// 	setStandardFlagType(fs, inV, nameprefix, short, usage)
+	// 	return nil
+	// }
 	switch ElemK {
 	case reflect.Struct:
 		//a struct
@@ -313,6 +351,12 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix, short, usage str
 			fieldT := inT.Elem().Field(i)
 			if fieldT.IsExported() {
 				//only handle exported field
+
+				//skip unsupported kind
+				if !isSupportedKind(fieldT.Type.Kind()) {
+					continue
+				}
+
 				//get tags
 				if _, exists := fieldT.Tag.Lookup(SkipTag); exists {
 					continue
@@ -358,10 +402,20 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix, short, usage str
 						setTextEncodingType(fs, field, fname, fshort, usage)
 						continue
 					}
+					//these are kinds directly supported by flag module
+					if isFlagSupportedKind(field.Elem().Kind()) {
+						setStandardFlagType(fs, field, fname, fshort, usage)
+						continue
+					}
 				} else {
 					if reflect.PointerTo(fieldT.Type).Implements(textEncodingInt) {
 						//textmarshale
 						setTextEncodingType(fs, field.Addr(), fname, fshort, usage)
+						continue
+					}
+					//these are kinds directly supported by flag module
+					if isFlagSupportedKind(fieldT.Type.Kind()) {
+						setStandardFlagType(fs, field.Addr(), fname, fshort, usage)
 						continue
 					}
 				}
@@ -399,35 +453,29 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix, short, usage str
 				//check if the field is a struct
 				if fieldT.Type.Kind() == reflect.Struct ||
 					(fieldT.Type.Kind() == reflect.Pointer && fieldT.Type.Elem().Kind() == reflect.Struct) {
-					if _, ok := fieldT.Tag.Lookup(ActTag); ok {
+					if methodName, ok := fieldT.Tag.Lookup(ActTag); ok { //if this is an act struct
 						if _, ok := filler.fsMap[fname]; ok {
 							return fmt.Errorf("found struct type field with duplicate name %v", fname)
 						}
-						if methodName, ok := fieldT.Tag.Lookup(ActMethodTag); !ok {
-							return fmt.Errorf("action %v doesn't have %v tag", fieldT.Name, ActMethodTag)
-						} else {
+						var m RunMethod = DefRunMethod
+						methodName = strings.TrimSpace(methodName)
+						if methodName != "" {
 							methodVal := getMethod(root, field, methodName)
 							if !methodVal.IsValid() {
 								return fmt.Errorf("action %v's method %v not found", fieldT.Name, methodName)
 							}
-
-							// filler.fsMap[fname] = newInheritFiller(filler, fname, usage)
-							// filler.translatedActNameMap[fname] = fieldT.Name
-							// filler.orderList = append(filler.orderList, fname)
-
-							filler.addNewAct(fname, fieldT.Name, usage, methodVal.Interface().(func(*cobra.Command, []string)), true)
-
-							// flag.NewFlagSet(fieldT.Name, filler.errHandle)
-
-							err = filler.fsMap[fname].walk(root, field, fname, fshort, usage, true)
-							if err != nil {
-								return err
-							}
-							continue
-
+							m = methodVal.Interface().(func(*cobra.Command, []string))
 						}
+
+						filler.addNewAct(fname, usage, m)
+						err = filler.fsMap[fname].walk(root, field, fname, fshort, usage, true)
+						if err != nil {
+							return err
+						}
+						continue
 					}
 				}
+				//non-act struct or
 				err = filler.walk(root, field, fname, fshort, usage, false)
 				if err != nil {
 					return err
@@ -437,19 +485,6 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix, short, usage str
 	}
 	return nil
 }
-
-var ErrInvalidAction = errors.New("unknown action")
-
-// like, PrseArgs, use os.Args as input
-// func (filler *Filler) Parse() ([]string, error) {
-// 	cmd, args, err := filler.cobraCMD.Traverse(os.Args[1:])
-// 	if err != nil {
-// 		panic(err)
-// 	}
-// 	fmt.Println("cobra", cmd.Use, args)
-
-// 	return filler.ParseArgs(os.Args[1:])
-// }
 
 type isBoolInt interface {
 	IsBoolFlag() bool
@@ -512,103 +547,4 @@ L1:
 
 	}
 	return -1, nil
-}
-
-// ParseArgs parse the args, return parsed actions as a slice of string, each is a parsed action name
-// func (filler *Filler) ParseArgs(args []string) ([]string, error) {
-// 	parsedActions := []string{}
-// 	var nextActPos int = -1
-// 	var nextAct string
-// 	var err error
-// 	errHanlder := func(inerr error) {
-// 		if inerr != nil {
-// 			switch filler.errHandle {
-// 			case flag.ExitOnError:
-// 				fmt.Println("-----?", err)
-// 				os.Exit(2)
-// 			case flag.PanicOnError:
-// 				panic(err)
-// 			}
-// 		}
-
-// 	}
-// 	nextActPos, err = filler.getNextActPosState(args)
-// 	if err != nil {
-// 		errHanlder(err)
-// 		return nil, err
-// 	}
-// 	if nextActPos >= 0 {
-// 		nextAct = args[nextActPos]
-// 	}
-// 	endPos := len(args)
-// 	if nextActPos >= 0 {
-// 		endPos = nextActPos
-// 	}
-// 	err = filler.fs.Parse(args[:endPos])
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	if nextActPos >= 0 {
-// 		if nextFiller, ok := filler.fsMap[nextAct]; !ok {
-// 			err = fmt.Errorf("%w: %v", ErrInvalidAction, nextAct)
-// 			errHanlder(err)
-// 			return nil, err
-// 		} else {
-// 			parsedActions = append(parsedActions, filler.translatedActNameMap[nextAct])
-// 			acts, err := nextFiller.ParseArgs(args[endPos+1:])
-// 			if err != nil {
-// 				errHanlder(err)
-// 				return nil, err
-// 			}
-// 			parsedActions = append(parsedActions, acts...)
-// 		}
-// 	}
-// 	return parsedActions, nil
-// }
-
-// // GetActUsage returns filler's child action usage specified by actname,
-// // actname should be the field name before renaming;
-// // return "" if not found
-// func (filler *Filler) GetActUsage(actname string) string {
-// 	for rn, n := range filler.translatedActNameMap {
-// 		if n == actname {
-// 			return filler.fsMap[rn].UsageStr("")
-// 		}
-// 	}
-// 	return ""
-// }
-
-// // UsageStr return a usage string for the filler and its descendant fillers (a.k.a actions)
-// func (filler *Filler) UsageStr(prefix string) string {
-// 	step := "  "
-// 	indent := prefix + step
-// 	buf := new(bytes.Buffer)
-// 	fmt.Fprintln(buf, filler.usage)
-// 	filler.fs.VisitAll(func(f *flag.Flag) {
-// 		fmt.Fprintf(buf, "%v- %v: %v\n", indent, f.Name,
-// 			// reflect.Indirect(reflect.ValueOf(f.Value)).Kind(),
-// 			f.Usage)
-// 		if f.DefValue != "" {
-// 			fmt.Fprintf(buf, "%v\tdefault:%v\n", indent, f.DefValue)
-// 		}
-// 	})
-// 	for _, childname := range filler.orderList {
-// 		child := filler.fsMap[childname]
-// 		fmt.Fprintf(buf, "%v= %v: ", indent, childname)
-// 		fmt.Fprint(buf, child.UsageStr(indent))
-// 	}
-// 	return buf.String()
-// }
-
-// // Usage print the string returned by UsageStr
-// func (filler *Filler) Usage() {
-// 	fmt.Println(filler.UsageStr(""))
-// }
-
-func (filler *Filler) Exec() error {
-	return filler.cobraCMD.Execute()
-}
-
-func (filler *Filler) GetCobraCMD() *cobra.Command {
-	return filler.cobraCMD
 }

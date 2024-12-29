@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"strings"
 
-	flag "github.com/spf13/pflag"
+	flag "github.com/hujun-open/pflag"
 )
 
 // this is to support slice and array
