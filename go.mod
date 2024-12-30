@@ -1,4 +1,4 @@
-module github.com/hujun-open/myflags
+module github.com/hujun-open/myflags/v2
 
 go 1.20
 

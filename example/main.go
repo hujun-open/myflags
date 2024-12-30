@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/hujun-open/cobra"
-	"github.com/hujun-open/myflags"
+	"github.com/hujun-open/myflags/v2"
 )
 
 type ZipCLI struct {

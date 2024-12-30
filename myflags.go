@@ -548,3 +548,27 @@ L1:
 	}
 	return -1, nil
 }
+
+// IsOwnAction check if the cobra.Command.ExecuteC() returned command cmd is intended for cobra's own action, like help or completion command
+// completionCMDName and helpCMDName specifies corresponding completion and help command name,
+// "completion" and "help" are used if they are empty string.
+func IsOwnAction(cmd *cobra.Command, completionCMDName, helpCMDName string) bool {
+	if completionCMDName == "" {
+		completionCMDName = "completion"
+	}
+	if helpCMDName == "" {
+		helpCMDName = "help"
+	}
+	switch cmd.Name() {
+	case completionCMDName, helpCMDName:
+		return true
+	}
+	if cmd.Parent().Name() == completionCMDName {
+		return true
+	}
+	if cmd.Flags().Lookup("help").Value.String() == "true" {
+		return true
+	}
+	return false
+
+}

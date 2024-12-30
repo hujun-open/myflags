@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hujun-open/myflags"
+	"github.com/hujun-open/myflags/v2"
 )
 
 // FlagConverter is used to facilitate Register() by create a RegisteredConverters instance with From/To assigned to corresponding function
