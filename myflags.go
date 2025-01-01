@@ -113,6 +113,8 @@ const (
 	ActTag = "action"
 	//RequiredTag indicate the flag is mandatory required
 	RequiredTag = "required"
+	//ValidValuesTag is a list of valid values for the field, separated by comma, used for completion
+	ValidValuesTag = "validvals"
 )
 
 // RunMethod is the type of function could be used as cobra.Command.Run
@@ -549,10 +551,22 @@ L1:
 	return -1, nil
 }
 
-// IsOwnAction check if the cobra.Command.ExecuteC() returned command cmd is intended for cobra's own action, like help or completion command
+// IsOwnAction check if the cobra.Command.ExecuteC() returned command cmd is intended for cobra's own action, like help, completion command or --version flag with root command
 // completionCMDName and helpCMDName specifies corresponding completion and help command name,
 // "completion" and "help" are used if they are empty string.
-func IsOwnAction(cmd *cobra.Command, completionCMDName, helpCMDName string) bool {
+// it also return true if cmd is the root command and skipRootCMD is true,
+func IsOwnAction(cmd *cobra.Command, completionCMDName, helpCMDName string, skipRootCMD bool) bool {
+	if cmd.Root() == cmd {
+		if skipRootCMD {
+			return true
+		} else {
+			if f := cmd.Flags().Lookup("version"); f != nil {
+				if f.Value.String() == "true" {
+					return true
+				}
+			}
+		}
+	}
 	if completionCMDName == "" {
 		completionCMDName = "completion"
 	}
@@ -563,12 +577,42 @@ func IsOwnAction(cmd *cobra.Command, completionCMDName, helpCMDName string) bool
 	case completionCMDName, helpCMDName:
 		return true
 	}
-	if cmd.Parent().Name() == completionCMDName {
-		return true
+	if cmd.Parent() != nil {
+		if cmd.Parent().Name() == completionCMDName {
+			return true
+		}
 	}
-	if cmd.Flags().Lookup("help").Value.String() == "true" {
-		return true
+	if f := cmd.Flags().Lookup("help"); f != nil {
+		if f.Value.String() == "true" {
+			return true
+		}
 	}
+
 	return false
 
+}
+
+// GetChildCommand return a child command specified by child path,
+// which is a string of list of command names separated by "/", start with "/" which represents calling filler's command
+// e.g. /act1/act12/act121; return nil if not found or childpath is not valid
+func (filler *Filler) GetChildCommand(childpath string) *cobra.Command {
+	if childpath[0] != '/' {
+		return nil
+	}
+	curCMD := filler.Command
+	for _, p := range strings.FieldsFunc(childpath, func(c rune) bool { return c == '/' }) {
+		found := false
+		for _, child := range curCMD.Commands() {
+			fmt.Println("p", p, "child", child.Name())
+			if child.Name() == p {
+				found = true
+				curCMD = child
+				break
+			}
+		}
+		if !found {
+			return nil
+		}
+	}
+	return curCMD
 }

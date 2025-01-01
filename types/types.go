@@ -1,12 +1,34 @@
-// Package types provide myflags support for following golang types:
-//
-//   - net.HardwareAddr
-//   - net.IPNet
-//   - net.IP
-//   - time.Time
-//   - time.Duration
-//
-// this package could be used by simply importing it, e.g. `import _ "github.com/hujun-open/myflags/types"`
+/*
+Package types provide myflags support for following golang types:
+  - net.HardwareAddr
+  - net.IPNet
+  - net.IP
+  - time.Time
+  - time.Duration
+  - all int/uint types
+
+this package could be used by simply importing it, e.g. `import _ "github.com/hujun-open/myflags/types"`
+
+# net.HardwareAddr
+
+  - unmarshal: support format like "11:22:33:44:55:66", "11-22-33-44-55-66"
+  - marshal: uses net.HardwareAddr.String()
+
+# net.IPNet / net.IPconst
+
+  - unmrshal: uses net.ParseCIDR() and net.ParseIP()
+  - marshal: uses net.IPNet.String() and net.IP.String()
+
+# time.Time
+
+  - unmarshal: use DefaultTimeLayout as layout format string, could be overridden by field tag `layout`
+  - marshal: use DefaultTimeLayout as layout format string, could be overridden by field tag `layout`
+
+# time.Duration
+
+  - unmarshal: uses time.ParseDuration()
+  - marshal: uses time.Time.String()
+*/
 package types
 
 import (
@@ -20,7 +42,7 @@ import (
 	"github.com/hujun-open/myflags/v2"
 )
 
-// FlagConverter is used to facilitate Register() by create a RegisteredConverters instance with From/To assigned to corresponding function
+// FlagConverter is used to facilitate Register() by creating a RegisteredConverters instance with From/To assigned to corresponding function
 type FlagConverter struct {
 	From myflags.FromStrFunc
 	To   myflags.ToStrFunc

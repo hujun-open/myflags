@@ -1,23 +1,31 @@
-package myflags
+/*
+# int/uint:
+
+  - unmarshal: uses strconv.ParseInt(), which support different base like `0xaf`
+  - marshal: base10 output, could be overridden by using using struct field tag `base`, with possible values 2, 8 or 16
+*/
+package types
 
 import (
 	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/hujun-open/myflags/v2"
 )
 
 func init() {
-	Register[int](&intType{len: 0, isUint: false})
-	Register[int8](&intType{len: 8, isUint: false})
-	Register[int16](&intType{len: 16, isUint: false})
-	Register[int32](&intType{len: 32, isUint: false})
-	Register[int64](&intType{len: 64, isUint: false})
-	Register[uint](&intType{len: 0, isUint: true})
-	Register[uint8](&intType{len: 8, isUint: true})
-	Register[uint16](&intType{len: 16, isUint: true})
-	Register[uint32](&intType{len: 32, isUint: true})
-	Register[uint64](&intType{len: 64, isUint: true})
+	myflags.Register[int](&intType{len: 0, isUint: false})
+	myflags.Register[int8](&intType{len: 8, isUint: false})
+	myflags.Register[int16](&intType{len: 16, isUint: false})
+	myflags.Register[int32](&intType{len: 32, isUint: false})
+	myflags.Register[int64](&intType{len: 64, isUint: false})
+	myflags.Register[uint](&intType{len: 0, isUint: true})
+	myflags.Register[uint8](&intType{len: 8, isUint: true})
+	myflags.Register[uint16](&intType{len: 16, isUint: true})
+	myflags.Register[uint32](&intType{len: 32, isUint: true})
+	myflags.Register[uint64](&intType{len: 64, isUint: true})
 }
 
 type intType struct {
@@ -40,21 +48,6 @@ func (i *intType) ToStr(in any, tag reflect.StructTag) string {
 }
 
 func (i *intType) FromStr(s string, tag reflect.StructTag) (any, error) {
-	// base, foundTag := tag.Lookup("base")
-	// // baseN := 10
-	// // switch strings.TrimSpace(base) {
-	// // case "10":
-	// // case "2":
-	// // 	baseN = 2
-	// // case "8":
-	// // 	baseN = 8
-	// // case "16":
-	// // 	baseN = 16
-	// // default:
-	// // 	if foundTag {
-	// // 		return nil, fmt.Errorf("unsupported base %v", base)
-	// // 	}
-	// // }
 	if !i.isUint {
 		n, err := strconv.ParseInt(strings.TrimSpace(s), 0, i.len)
 		if err != nil {

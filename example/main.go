@@ -61,6 +61,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	fmt.Println(filler.GetChildCommand("/compress/zipfile").Name())
 	if cmd.Flags().Lookup("help").Value.String() == "true" {
 		// --help is called
 		return
