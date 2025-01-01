@@ -114,7 +114,7 @@ const (
 	//RequiredTag indicate the flag is mandatory required
 	RequiredTag = "required"
 	//ValidValuesTag is a list of valid values for the field, separated by comma, used for completion
-	ValidValuesTag = "validvals"
+	ValidValuesTag = "choices"
 )
 
 // RunMethod is the type of function could be used as cobra.Command.Run
@@ -311,7 +311,7 @@ func isSupportedKind(inK reflect.Kind) bool {
 // - setStandardFlagType
 // - setTextEncodingType
 // - simpleType.process
-func (filler *Filler) walk(root, inV reflect.Value, nameprefix, short, usage string, isAct bool) error {
+func (filler *Filler) walk(root, inV reflect.Value, nameprefix, short, usage string, isAct bool) (ferr error) {
 	fs := filler.fs
 	requiredFlags := []string{}
 	var err error
@@ -325,11 +325,21 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix, short, usage str
 
 	}
 	ElemK := inV.Elem().Kind()
+	validFlagValsMap := make(map[string]string)
 	defer func() {
 		if isAct {
 			filler.PersistentFlags().AddFlagSet(fs)
 			for _, f := range requiredFlags {
 				cobra.MarkFlagRequired(fs, f)
+			}
+			for flagname, valstr := range validFlagValsMap {
+				helper := newValidFlagValues(valstr)
+				ferr = filler.Command.RegisterFlagCompletionFunc(flagname, helper.complete)
+				if ferr != nil {
+					ferr = fmt.Errorf("failed to register flag completion function for %v, %w", flagname, ferr)
+					return
+				}
+
 			}
 		}
 	}()
@@ -344,6 +354,7 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix, short, usage str
 	// 	setStandardFlagType(fs, inV, nameprefix, short, usage)
 	// 	return nil
 	// }
+
 	switch ElemK {
 	case reflect.Struct:
 		//a struct
@@ -381,6 +392,7 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix, short, usage str
 				if _, ok := fieldT.Tag.Lookup(RequiredTag); ok {
 					requiredFlags = append(requiredFlags, fname)
 				}
+				validFlagVals, _ := fieldT.Tag.Lookup(ValidValuesTag)
 
 				if field.Kind() == reflect.Pointer {
 					if field.IsNil() {
@@ -388,6 +400,46 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix, short, usage str
 						field.Set(reflect.New(fieldT.Type.Elem()))
 					}
 				}
+				//check if the field is an action struct
+				if fieldT.Type.Kind() == reflect.Struct ||
+					(fieldT.Type.Kind() == reflect.Pointer && fieldT.Type.Elem().Kind() == reflect.Struct) {
+					if methodName, ok := fieldT.Tag.Lookup(ActTag); ok { //if this is an act struct
+						if _, ok := filler.fsMap[fname]; ok {
+							return fmt.Errorf("found struct type field with duplicate name %v", fname)
+						}
+						var m RunMethod = DefRunMethod
+						methodName = strings.TrimSpace(methodName)
+						if methodName != "" {
+							methodVal := getMethod(root, field, methodName)
+							if !methodVal.IsValid() {
+								return fmt.Errorf("action %v's method %v not found", fieldT.Name, methodName)
+							}
+							m = methodVal.Interface().(func(*cobra.Command, []string))
+						}
+
+						filler.addNewAct(fname, usage, m)
+						err = filler.fsMap[fname].walk(root, field, fname, fshort, usage, true)
+						if err != nil {
+							return err
+						}
+						continue
+					}
+				}
+
+				//from now on, the field is NOT action struct
+
+				//flagFunc gets called for each valid flag
+				flagFunc := func(islist bool) error {
+					if islist {
+						return nil
+					}
+					if validFlagVals != "" {
+						validFlagValsMap[fname] = validFlagVals
+					}
+					return nil
+
+				}
+
 				//check if it is a registered type, a.k.a simpleType
 				f := getFactory(field.Interface())
 				if f != nil {
@@ -395,6 +447,10 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix, short, usage str
 						field = field.Addr()
 					}
 					f(fs, field, fieldT.Tag, fname, fshort, usage)
+					err = flagFunc(false)
+					if err != nil {
+						return fmt.Errorf("there is error processing flag %v, %w", fname, err)
+					}
 					continue
 				}
 				//check if it implements textMarshal
@@ -402,22 +458,38 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix, short, usage str
 					if fieldT.Type.Implements(textEncodingInt) {
 						//pointer to textmarshale
 						setTextEncodingType(fs, field, fname, fshort, usage)
+						err = flagFunc(false)
+						if err != nil {
+							return fmt.Errorf("there is error processing flag %v, %w", fname, err)
+						}
 						continue
 					}
 					//these are kinds directly supported by flag module
 					if isFlagSupportedKind(field.Elem().Kind()) {
 						setStandardFlagType(fs, field, fname, fshort, usage)
+						err = flagFunc(false)
+						if err != nil {
+							return fmt.Errorf("there is error processing flag %v, %w", fname, err)
+						}
 						continue
 					}
 				} else {
 					if reflect.PointerTo(fieldT.Type).Implements(textEncodingInt) {
 						//textmarshale
 						setTextEncodingType(fs, field.Addr(), fname, fshort, usage)
+						err = flagFunc(false)
+						if err != nil {
+							return fmt.Errorf("there is error processing flag %v, %w", fname, err)
+						}
 						continue
 					}
 					//these are kinds directly supported by flag module
 					if isFlagSupportedKind(fieldT.Type.Kind()) {
 						setStandardFlagType(fs, field.Addr(), fname, fshort, usage)
+						err = flagFunc(false)
+						if err != nil {
+							return fmt.Errorf("there is error processing flag %v, %w", fname, err)
+						}
 						continue
 					}
 				}
@@ -446,37 +518,17 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix, short, usage str
 						if err != nil {
 							return err
 						}
+						err = flagFunc(true)
+						if err != nil {
+							return fmt.Errorf("there is error processing flag %v, %w", fname, err)
+						}
 						continue
 					} else {
 						return fmt.Errorf("%v is a slice/array of unsupported type %v", fieldT.Name, fieldT)
 					}
 
 				}
-				//check if the field is a struct
-				if fieldT.Type.Kind() == reflect.Struct ||
-					(fieldT.Type.Kind() == reflect.Pointer && fieldT.Type.Elem().Kind() == reflect.Struct) {
-					if methodName, ok := fieldT.Tag.Lookup(ActTag); ok { //if this is an act struct
-						if _, ok := filler.fsMap[fname]; ok {
-							return fmt.Errorf("found struct type field with duplicate name %v", fname)
-						}
-						var m RunMethod = DefRunMethod
-						methodName = strings.TrimSpace(methodName)
-						if methodName != "" {
-							methodVal := getMethod(root, field, methodName)
-							if !methodVal.IsValid() {
-								return fmt.Errorf("action %v's method %v not found", fieldT.Name, methodName)
-							}
-							m = methodVal.Interface().(func(*cobra.Command, []string))
-						}
 
-						filler.addNewAct(fname, usage, m)
-						err = filler.fsMap[fname].walk(root, field, fname, fshort, usage, true)
-						if err != nil {
-							return err
-						}
-						continue
-					}
-				}
 				//non-act struct or
 				err = filler.walk(root, field, fname, fshort, usage, false)
 				if err != nil {
@@ -556,6 +608,9 @@ L1:
 // "completion" and "help" are used if they are empty string.
 // it also return true if cmd is the root command and skipRootCMD is true,
 func IsOwnAction(cmd *cobra.Command, completionCMDName, helpCMDName string, skipRootCMD bool) bool {
+	if cmd.Name() == "__complete" {
+		return true
+	}
 	if cmd.Root() == cmd {
 		if skipRootCMD {
 			return true
@@ -603,7 +658,6 @@ func (filler *Filler) GetChildCommand(childpath string) *cobra.Command {
 	for _, p := range strings.FieldsFunc(childpath, func(c rune) bool { return c == '/' }) {
 		found := false
 		for _, child := range curCMD.Commands() {
-			fmt.Println("p", p, "child", child.Name())
 			if child.Name() == p {
 				found = true
 				curCMD = child

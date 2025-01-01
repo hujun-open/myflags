@@ -10,16 +10,16 @@ import (
 type ZipCLI struct {
 	ConfigFile string `usage:"working profile"`
 	Compress   struct {
-		Loop      uint `base:"16" short:"l" usage:"number of compress iterations" required:""`
-		Profile   string
-		Skip      bool     `alias:"skip"` //use "skip" as the parameter name
-		NoFlag    string   `skipflag:""`  //ignore this field for flagging
+		Loop      uint   `base:"16" short:"l" usage:"number of compress iterations"`
+		Profile   string `choices:"p1,p2,p3"`
+		Skip      bool
+		NoFlag    string   `skipflag:""` //ignore this field for flagging
 		DryRun    struct{} `usage:"dry run, doesn't actually create any file" action:"Dry"`
 		ZipFolder struct {
-			FolderName string `alias:"folder" usage:"specify folder name"`
+			FolderName string `usage:"specify folder name"`
 		} `usage:"zip a folder" action:""`
 		ZipFile struct {
-			FileName string `alias:"f" usage:"specify file name"`
+			FileName string `usage:"specify file name"`
 		} `usage:"zip a file" action:""`
 	} `usage:"to compress things" action:""`
 	Extract struct {
@@ -52,7 +52,7 @@ func main() {
 		ConfigFile: "default.conf",
 	}
 	zipcli.Compress.Loop = 0x20
-	zipcli.Compress.ZipFile.FileName = "defaultzip.file"
+	// zipcli.Compress.ZipFile.FileName = "defaultzip.file"
 	err := filler.Fill(&zipcli)
 	if err != nil {
 		panic(err)
@@ -61,11 +61,14 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(filler.GetChildCommand("/compress/zipfile").Name())
-	if cmd.Flags().Lookup("help").Value.String() == "true" {
-		// --help is called
+	if myflags.IsOwnAction(cmd, "", "", true) {
 		return
 	}
+	// fmt.Println(filler.GetChildCommand("/compress/zipfile").Name())
+	// if cmd.Flags().Lookup("help").Value.String() == "true" {
+	// 	// --help is called
+	// 	return
+	// }
 	fmt.Println("after execute", cmd.Name(), "got called")
 
 	// filler.PrintDebug()
