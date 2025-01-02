@@ -28,7 +28,7 @@ func (filler *Filler) GenCompletionScript(cmd *cobra.Command, args []string) {
 			fmt.Printf("failed to generate BASHv2 completion script, %v\n", err)
 			return
 		}
-		fmt.Println(string(buf.Bytes()))
+		fmt.Println(buf.String())
 		return
 	default:
 		fmt.Printf("unsupported shell type %v\n", shell)

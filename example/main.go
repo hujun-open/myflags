@@ -8,23 +8,23 @@ import (
 )
 
 type ZipCLI struct {
-	ConfigFile string `usage:"working profile"`
+	ConfigFile string `short:"c" usage:"working profile" required:""`
 	Compress   struct {
 		Loop      uint   `base:"16" short:"l" usage:"number of compress iterations"`
-		Profile   string `choices:"p1,p2,p3"`
+		Profile   string `usage:"compress profile" choices:"p1,p2,p3"`
 		Skip      bool
 		NoFlag    string   `skipflag:""` //ignore this field for flagging
-		DryRun    struct{} `usage:"dry run, doesn't actually create any file" action:"Dry"`
+		DryRun    struct{} `alias:"dry" usage:"dry run, doesn't actually create any file" action:"Dry"`
 		ZipFolder struct {
 			FolderName string `usage:"specify folder name"`
-		} `usage:"zip a folder" action:""`
+		} `usage:"zip a folder" action:"ZipFolder"`
 		ZipFile struct {
 			FileName string `usage:"specify file name"`
-		} `usage:"zip a file" action:""`
-	} `usage:"to compress things" action:""`
+		} `usage:"zip a file" action:"ZipFile"`
+	} `usage:"to compress things" action:"Comp"`
 	Extract struct {
 		InputFile string `usage:"input zip file"`
-	} `usage:"to unzip things" action:""`
+	} `usage:"to unzip things" action:"Extr"`
 }
 
 func (zipcli *ZipCLI) Dry(cmd *cobra.Command, args []string) {
@@ -46,44 +46,22 @@ func (zipcli *ZipCLI) Comp(cmd *cobra.Command, args []string) {
 }
 
 func main() {
+	//create a new filler with the application name and its description.
 	filler := myflags.NewFiller("cptool", "a zip command")
 	//some default values
 	zipcli := ZipCLI{
 		ConfigFile: "default.conf",
 	}
 	zipcli.Compress.Loop = 0x20
-	// zipcli.Compress.ZipFile.FileName = "defaultzip.file"
+	zipcli.Compress.ZipFile.FileName = "defaultzip.file"
+	//call Fill
 	err := filler.Fill(&zipcli)
 	if err != nil {
 		panic(err)
 	}
-	cmd, err := filler.ExecuteC()
+	//call Execute to fill zipcli with parsed values from input
+	err = filler.Execute()
 	if err != nil {
 		panic(err)
 	}
-	if myflags.IsOwnAction(cmd, "", "", true) {
-		return
-	}
-	// fmt.Println(filler.GetChildCommand("/compress/zipfile").Name())
-	// if cmd.Flags().Lookup("help").Value.String() == "true" {
-	// 	// --help is called
-	// 	return
-	// }
-	fmt.Println("after execute", cmd.Name(), "got called")
-
-	// filler.PrintDebug()
-	// acts, err := filler.Parse()
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// fmt.Println("parsed actions", acts)
-	// fmt.Printf("%+v\n", zipcli)
-	// if acts[0] == myflags.CompleteCMDName {
-	// 	script, err := filler.GenCompletionScript(myflags.ShellBash)
-	// 	if err != nil {
-	// 		panic(err)
-	// 	}
-	// 	fmt.Println("xxx")
-	// 	fmt.Println(script)
-	// }
 }

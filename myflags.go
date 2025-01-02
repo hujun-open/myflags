@@ -68,9 +68,10 @@ func WithFlagErrHandling(h flag.ErrorHandling) FillerOption {
 }
 
 // NewFiller creates a new Filler,
-// fsname is the name for flagset, usage is the overall usage introduction.
+// name is the name for the command, usage is the overall usage introduction.
 // optionally, a list of FillerOptions could be specified.
-func NewFiller(fsname, usage string, options ...FillerOption) *Filler {
+// Note: the name must be same as the name of application executable, otherwise shell completion won't work.
+func NewFiller(name, usage string, options ...FillerOption) *Filler {
 	r := &Filler{
 		errHandle: DefaultErrHandle,
 		renamer:   DefaultRenamer,
@@ -79,11 +80,11 @@ func NewFiller(fsname, usage string, options ...FillerOption) *Filler {
 		o(r)
 	}
 	r.fsMap = make(map[string]*Filler)
-	r.fs = flag.NewFlagSet(fsname, r.errHandle)
+	r.fs = flag.NewFlagSet(name, r.errHandle)
 	r.usage = usage
 	r.optList = options
 	r.Command = &cobra.Command{
-		Use:   fsname,
+		Use:   name,
 		Short: usage,
 	}
 
@@ -132,7 +133,7 @@ func (filler *Filler) addNewAct(act, usage string, method RunMethod) {
 func (filler *Filler) Fill(in any) error {
 	t := reflect.TypeOf(in)
 	if t.Kind() == reflect.Ptr && t.Elem().Kind() == reflect.Struct {
-		err := filler.walk(reflect.ValueOf(in), reflect.ValueOf(in), "", "", "", true)
+		err := filler.walk(reflect.ValueOf(in), reflect.ValueOf(in), "", true)
 		if err != nil {
 			return err
 		}
@@ -311,7 +312,7 @@ func isSupportedKind(inK reflect.Kind) bool {
 // - setStandardFlagType
 // - setTextEncodingType
 // - simpleType.process
-func (filler *Filler) walk(root, inV reflect.Value, nameprefix, short, usage string, isAct bool) (ferr error) {
+func (filler *Filler) walk(root, inV reflect.Value, nameprefix string, isAct bool) (ferr error) {
 	fs := filler.fs
 	requiredFlags := []string{}
 	var err error
@@ -330,7 +331,11 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix, short, usage str
 		if isAct {
 			filler.PersistentFlags().AddFlagSet(fs)
 			for _, f := range requiredFlags {
-				cobra.MarkFlagRequired(fs, f)
+				ferr = cobra.MarkFlagRequired(fs, f)
+				if ferr != nil {
+					ferr = fmt.Errorf("failed to mark flag %v required, %w", f, err)
+					return
+				}
 			}
 			for flagname, valstr := range validFlagValsMap {
 				helper := newValidFlagValues(valstr)
@@ -418,7 +423,7 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix, short, usage str
 						}
 
 						filler.addNewAct(fname, usage, m)
-						err = filler.fsMap[fname].walk(root, field, fname, fshort, usage, true)
+						err = filler.fsMap[fname].walk(root, field, fname, true)
 						if err != nil {
 							return err
 						}
@@ -530,7 +535,7 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix, short, usage str
 				}
 
 				//non-act struct or
-				err = filler.walk(root, field, fname, fshort, usage, false)
+				err = filler.walk(root, field, fname, false)
 				if err != nil {
 					return err
 				}
@@ -538,69 +543,6 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix, short, usage str
 		}
 	}
 	return nil
-}
-
-type isBoolInt interface {
-	IsBoolFlag() bool
-}
-
-func (filler *Filler) getNextActPosState(args []string) (int, error) {
-	const (
-		stateArgDone = iota
-		stateInArg
-	)
-	state := stateArgDone
-	var hasdash bool
-L1:
-	for i, arg := range args {
-		hasdash = strings.HasPrefix(arg, "-")
-		switch state {
-		case stateArgDone:
-			if !hasdash {
-				if _, ok := filler.fsMap[arg]; ok {
-					return i, nil
-				} else {
-					return -1, fmt.Errorf(`found unrecognized action "%v"`, arg)
-				}
-			} else {
-				//has -
-				//check if it is argname=xxx format
-				_, _, found := strings.Cut(arg[1:], "=")
-				if found {
-					//yes
-					state = stateArgDone
-					continue L1
-				} else {
-					//no,meaing it is just "-argname" check if this is boolvar
-					isBool := false
-					filler.fs.VisitAll(func(f *flag.Flag) {
-						if f.Name == arg[1:] {
-							if s, ok := f.Value.(isBoolInt); ok {
-								if s.IsBoolFlag() {
-									isBool = true
-								}
-							}
-						}
-					})
-					if isBool {
-						state = stateArgDone
-						continue L1
-					}
-				}
-				state = stateInArg
-			}
-		case stateInArg:
-			if !hasdash {
-				state = stateArgDone
-			} else {
-				// has -
-				// this could be current arg is bool "like -arg1 -arg2"
-			}
-
-		}
-
-	}
-	return -1, nil
 }
 
 // IsOwnAction check if the cobra.Command.ExecuteC() returned command cmd is intended for cobra's own action, like help, completion command or --version flag with root command

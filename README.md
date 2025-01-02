@@ -1,29 +1,24 @@
 [![Go package](https://github.com/hujun-open/myflags/actions/workflows/CI.yaml/badge.svg)](https://github.com/hujun-open/myflags/actions/workflows/CI.yaml)
 [![PkgGoDev](https://pkg.go.dev/badge/github.com/hujun-open/myflags)](https://pkg.go.dev/github.com/hujun-open/myflags)
 # myflags
-myflags is a Golang module to make command line flag easier, it creates command line flags based on fields in a struct, so user doesn't need to manually create the flags one by one. it also supports more types than `flag` module, and easily extensible for new types, user could even add support for existing type without using alias type.
+myflags is a Golang module to make creating command line application easy, it built on top of [cobra](https://cobra.dev/), provides following **additional** features:
 
-myflags also support multiple and hierarchical actions, each action could have a set of its own parameters and sub-actions, for example a file compression tool `cptool` could have "compress" and "extract" action, and each has different parameters, and "compress" could have sub-actions like "zipfoler" and "zipfile", each then again has different parameters. 
+1.  Instead of creating commands, sub-commands and flags manually, user could simply define all the commands/flags in a struct, myflags automatically creates command/flags based on the struct definition and parsed result get automatically assigned to the struct field that corresponding to the flag. 
+    - Some common cobra command attribute likes shorthand name, usage, auto-completion choices could be specified as struct field tags 
+2. In addition to the types supported by cobra, myflags provides capability to extend support for new types as flag, user could even provide myflags support for existing types without creating alias type
+    - `types` sub module provides support for some existing golang types like time.Time
 
-Input wise, parameters of an action has prefix "-", while action doesn't have any prefix.
 
-for example, compress a folder could be command line input like `cptool compress -profile <profile_name> zipfolder -foldername <foldername>`.
 
-## Struct Field Tags
-Following struct field tags are supported:
 
-- skipflag: skip the field for flagging
-- alias: use the specified alias as the name of the parameter
-- usage: the usage string of the parameter
-- action: this field is an action 
 
 
 ## Quick Start 
 Using myflags is straight forward:
 
-1. define all flags in a struct, each action is a field whose type is another struct.
+1. define all commands/flags in a struct, each command is a sub-struct with tag "action", the value of the tag specifies a struct method gets called when the corresponding command is entered in CLI.
 2. create a `Filler` with the struct, call `Fill` method with the struct variable with default value. 
-3. call `flag.Parse()`
+3. call one of cobra's command execute method like `Filler.Execute`
 
 Following is an example:
 https://github.com/hujun-open/myflags/blob/2fd27463cabdc368b87aecc7addbb42f5535abc6/example/main.go#L1-L45
@@ -60,7 +55,13 @@ parsed actions [Compress DryRun]
 {ConfigFile:cp.conf Compress:{Loop:100 Profile: Skip:false NoFlag: DryRun:{} ZipFolder:{FolderName:} ZipFile:{FileName:defaultzip.file}} Extract:{InputFile:} Help:{}}
 
 ```
+## Struct Field Tags
+Following struct field tags are supported:
 
+- skipflag: skip the field for flagging
+- alias: use the specified alias as the name of the parameter
+- usage: the usage string of the parameter
+- action: this field is an action 
 
 
 ## Supported Types

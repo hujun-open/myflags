@@ -88,13 +88,13 @@ type testCase struct {
 
 func (tc *testCase) do(t *testing.T) error {
 	fflag := tc.errh
-	// if tc.shouldFail {
-	// 	fflag = flag.ContinueOnError
-	// }
 	filler := myflags.NewFiller(
 		"test", "", myflags.WithFlagErrHandling(fflag),
 	)
-	filler.Fill(&tc.input)
+	err := filler.Fill(&tc.input)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	parsedActs, err := filler.ParseArgs(tc.Args)
 	if err != nil {
@@ -108,8 +108,6 @@ func (tc *testCase) do(t *testing.T) error {
 	}
 	t.Logf("result:\n%v\n", myflags.PrettyStruct(tc.input, ""))
 	t.Logf("expected:\n%v\n", myflags.PrettyStruct(tc.expectedResult, ""))
-	// fmt.Printf("result:::%+v\n", tc.input)
-	// fmt.Printf("expected:::%+v\n", tc.expectedResult)
 	return nil
 }
 
@@ -320,7 +318,7 @@ func TestMyflags(t *testing.T) {
 			},
 			shouldFail: true,
 		},
-		{ //case 18, testing 0x
+		{ //case 19, testing 0x
 			input: TestStruct{},
 			Args:  []string{"act1", "-act1counter", "0x99"},
 			expectedResult: TestStruct{
@@ -335,7 +333,7 @@ func TestMyflags(t *testing.T) {
 			},
 			expectedActs: []string{"Act1"},
 		},
-		{ //case 19, action with globla bool
+		{ //case 20, action with globla bool
 			input: TestStruct{},
 			Args:  []string{"-boolvar", "act1", "-act1counter", "0x99"},
 			expectedResult: TestStruct{
@@ -355,9 +353,9 @@ func TestMyflags(t *testing.T) {
 	}
 
 	for i, c := range caseList {
-		if i != 20 {
-			continue
-		}
+		// if i != 20 {
+		// 	continue
+		// }
 		t.Logf("testing case %d", i)
 		err := c.do(t)
 		if err != nil {
@@ -400,7 +398,8 @@ func deepEqual(in, expect any) bool {
 
 	switch typeIn.Kind() {
 	case reflect.Struct:
-		if typeIn.PkgPath() != "github.com/hujun-open/myflags_test" && typeIn.PkgPath() != "" {
+		if typeIn.PkgPath() != "github.com/hujun-open/myflags/v2_test" && typeIn.PkgPath() != "" {
+			fmt.Println(typeIn.PkgPath())
 			// if !reflect.DeepEqual(valIn.Field(i).Interface(), valExpect.Field(i).Interface()) {
 			return fmt.Sprint(valIn.Interface()) == fmt.Sprint(valExpect.Interface())
 		}
