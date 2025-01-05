@@ -2,6 +2,7 @@ package myflags
 
 import (
 	"encoding"
+
 	// "flag"
 	"fmt"
 	"reflect"
@@ -27,20 +28,28 @@ func (list *listType) String() string {
 		return r
 	}
 	for i := 0; i < list.val.Elem().Len(); i++ {
+		elemVal := list.val.Elem().Index(i).Interface()
 		if list.val.Elem().Index(i).Kind() == reflect.Pointer {
 			if list.val.Elem().Index(i).IsNil() {
 				r += ","
 				continue
 			}
+		} else {
+			elemVal = list.val.Elem().Index(i).Addr().Interface()
 		}
-		r += list.conv.ToStr(list.val.Elem().Index(i).Interface(), list.tags) + ","
+		r += list.conv.ToStr(elemVal, list.tags) + ","
 
 	}
 	return r[:len(r)-1]
 }
 
 func (list *listType) Type() string {
-	return list.val.Type().Name() + " list"
+	t := list.val.Type()
+	if list.val.Kind() == reflect.Pointer {
+		t = list.val.Elem().Type()
+	}
+
+	return t.String()
 }
 
 func (list *listType) Set(s string) error {
@@ -56,6 +65,7 @@ func (list *listType) Set(s string) error {
 		if !isArray {
 			//slice
 			if !isElmPointer {
+
 				list.val.Elem().Set(reflect.Append(list.val.Elem(), reflect.ValueOf(n)))
 			} else {
 				newval := reflect.New(list.val.Type().Elem().Elem().Elem())

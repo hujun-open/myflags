@@ -1,7 +1,6 @@
 package myflags_test
 
 import (
-	"flag"
 	"fmt"
 	"net/netip"
 	"reflect"
@@ -10,7 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hujun-open/myflags"
+	flag "github.com/hujun-open/pflag"
+
+	"github.com/hujun-open/myflags/v2"
+	_ "github.com/hujun-open/myflags/v2/types"
 	"golang.org/x/exp/slices"
 )
 
@@ -71,7 +73,7 @@ type TestStruct struct {
 	BoolSlice      []bool
 	AddrArray      [2]*netip.Addr
 	AddrSlice      []*netip.Addr
-	AddrNPSlice    []netip.Addr `alias:"anps"`
+	AddrNPSlice    []netip.Addr ``
 	Time           time.Time    `layout:"2006 02 Jan 15:04"`
 	SNL            SubnoList
 	ShouldSkipAddr netip.Addr `skipflag:""`
@@ -95,13 +97,16 @@ func (tc *testCase) do(t *testing.T) error {
 	if err != nil {
 		t.Fatal(err)
 	}
+	filler.SetArgs(tc.Args)
+	cmd, err := filler.ExecuteC()
 
-	parsedActs, err := filler.ParseArgs(tc.Args)
+	// parsedActs, err := filler.ParseArgs(tc.Args)
 	if err != nil {
 		return err
 	}
-	if !slices.Equal(parsedActs, tc.expectedActs) {
-		return fmt.Errorf("parsed acts %v is different from expected acts %v", parsedActs, tc.expectedActs)
+	pathList := strings.Fields(cmd.CommandPath())[1:]
+	if !slices.Equal(pathList, tc.expectedActs) {
+		return fmt.Errorf("parsed acts %v is different from expected acts %v", pathList, tc.expectedActs)
 	}
 	if !deepEqual(tc.input, tc.expectedResult) {
 		return fmt.Errorf("\n%+v is different from expected:\n%+v", myflags.PrettyStruct(tc.input, ""), myflags.PrettyStruct(tc.expectedResult, ""))
@@ -121,21 +126,21 @@ func TestMyflags(t *testing.T) {
 	caseList := []testCase{
 		{ //case 0
 			input: TestStruct{},
-			Args:  []string{"-addr", "1.1.1.1"},
+			Args:  []string{"--addr", "1.1.1.1"},
 			expectedResult: TestStruct{
 				Addr: netip.AddrFrom4([4]byte{1, 1, 1, 1}),
 			},
 		},
 		{ //case 1
 			input: TestStruct{},
-			Args:  []string{"-addrslice", "1.1.1.1"},
+			Args:  []string{"--addrslice", "1.1.1.1,2001:dead::beef"},
 			expectedResult: TestStruct{
-				AddrSlice: []*netip.Addr{createPAddr("1.1.1.1")},
+				AddrSlice: []*netip.Addr{createPAddr("1.1.1.1"), createPAddr("2001:dead::beef")},
 			},
 		},
 		{ //case 2
 			input: TestStruct{},
-			Args:  []string{"-boolvar"},
+			Args:  []string{"--boolvar"},
 			expectedResult: TestStruct{
 				BoolVar: true,
 			},
@@ -143,7 +148,7 @@ func TestMyflags(t *testing.T) {
 
 		{ //case 3, should fail
 			input: TestStruct{},
-			Args:  []string{"-addrslice", "1.1.1.1,1.1.1.2"},
+			Args:  []string{"--addrslice", "1.1.1.1,1.1.1.2"},
 			expectedResult: TestStruct{
 				AddrSlice: []*netip.Addr{createPAddr("1.1.1.1")},
 			},
@@ -151,14 +156,14 @@ func TestMyflags(t *testing.T) {
 		},
 		{ //case 4
 			input: TestStruct{},
-			Args:  []string{"-boolslice", "true,false"},
+			Args:  []string{"--boolslice", "true,false"},
 			expectedResult: TestStruct{
 				BoolSlice: []bool{true, false},
 			},
 		},
 		{ //case 5, nega case
 			input: TestStruct{},
-			Args:  []string{"-boolslice", "true,false"},
+			Args:  []string{"--boolslice", "true,false"},
 			expectedResult: TestStruct{
 				BoolSlice: []bool{true, true},
 			},
@@ -166,14 +171,14 @@ func TestMyflags(t *testing.T) {
 		},
 		{ //case 6
 			input: TestStruct{},
-			Args:  []string{"-addrarray", "1.1.1.1,1.1.1.2"},
+			Args:  []string{"--addrarray", "1.1.1.1,2001:dead::beef"},
 			expectedResult: TestStruct{
-				AddrArray: [2]*netip.Addr{createPAddr("1.1.1.1"), createPAddr("1.1.1.2")},
+				AddrArray: [2]*netip.Addr{createPAddr("1.1.1.1"), createPAddr("2001:dead::beef")},
 			},
 		},
 		{ //case 7
 			input: TestStruct{},
-			Args:  []string{"act1", "-act1counter", "0x99"},
+			Args:  []string{"act1", "--act1counter", "0x99"},
 			expectedResult: TestStruct{
 				Act1: struct {
 					Act1Counter *uint32 `base:"16"`
@@ -184,11 +189,11 @@ func TestMyflags(t *testing.T) {
 					Act1Counter: createInt[uint32](0x99),
 				},
 			},
-			expectedActs: []string{"Act1"},
+			expectedActs: []string{"act1"},
 		},
 		{ //case 8
 			input: TestStruct{},
-			Args:  []string{"-sub-subpointercounter", "100", "-sub-subcounterslice", "3,4,5"},
+			Args:  []string{"--sub-subpointercounter", "100", "--sub-subcounterslice", "3,4,5"},
 			expectedResult: TestStruct{
 				Sub: Sub{
 					SubPointerCounter: createInt[uint32](100),
@@ -199,7 +204,7 @@ func TestMyflags(t *testing.T) {
 		},
 		{ //case 9
 			input: TestStruct{},
-			Args:  []string{"-sub-subfloat64", "100.1"},
+			Args:  []string{"--sub-subfloat64", "100.1"},
 			expectedResult: TestStruct{
 				Sub: Sub{
 					SubFloat64: 100.1,
@@ -210,30 +215,30 @@ func TestMyflags(t *testing.T) {
 
 		{ //case 10
 			input: TestStruct{},
-			Args:  []string{"sub1", "-subpointercounter", "100", "-subcounterslice", "3,4,5"},
+			Args:  []string{"sub1", "--subpointercounter", "100", "--subcounterslice", "3,4,5"},
 			expectedResult: TestStruct{
 				Sub1: Sub{
 					SubPointerCounter: createInt[uint32](100),
 					SubCounterSlice:   []*uint32{createInt[uint32](3), createInt[uint32](4), createInt[uint32](5)},
 				},
 			},
-			expectedActs: []string{"Sub1"},
+			expectedActs: []string{"sub1"},
 		},
 		{ //case 11
 			input: TestStruct{},
-			Args:  []string{"sub1", "-subpointercounter", "100", "-subcounterslice", "5,4,3"},
+			Args:  []string{"sub1", "--subpointercounter", "100", "--subcounterslice", "5,4,3"},
 			expectedResult: TestStruct{
 				Sub1: Sub{
 					SubPointerCounter: createInt[uint32](100),
 					SubCounterSlice:   []*uint32{createInt[uint32](3), createInt[uint32](4), createInt[uint32](5)},
 				},
 			},
-			expectedActs: []string{"Sub1"},
+			expectedActs: []string{"sub1"},
 			shouldFail:   true,
 		},
 		{ //case 12
 			input: TestStruct{},
-			Args:  []string{"-anps", "1.1.1.1,2001:dead::beef"},
+			Args:  []string{"--addrnpslice", "1.1.1.1,2001:dead::beef"},
 			expectedResult: TestStruct{
 				AddrNPSlice: []netip.Addr{
 					*createPAddr("1.1.1.1"),
@@ -243,7 +248,7 @@ func TestMyflags(t *testing.T) {
 		},
 		{ //case 13
 			input: TestStruct{},
-			Args:  []string{"-snl", "9,10,11"},
+			Args:  []string{"--snl", "9,10,11"},
 			expectedResult: TestStruct{
 				SNL: []Subno{
 					{
@@ -260,14 +265,14 @@ func TestMyflags(t *testing.T) {
 		},
 		{ //case 14
 			input: TestStruct{},
-			Args:  []string{"-paddr", "1.1.3.3"},
+			Args:  []string{"--paddr", "1.1.3.3"},
 			expectedResult: TestStruct{
 				PAddr: createPAddr("1.1.3.3"),
 			},
 		},
 		{ //case 15
 			input: TestStruct{},
-			Args:  []string{"-shouldskipaddr", "1.1.3.3"},
+			Args:  []string{"--shouldskipaddr", "1.1.3.3"},
 			expectedResult: TestStruct{
 				ShouldSkipAddr: *createPAddr("1.1.3.3"),
 			},
@@ -275,7 +280,7 @@ func TestMyflags(t *testing.T) {
 		},
 		{ //case 16
 			input: TestStruct{},
-			Args:  []string{"act1", "-act1counter", "0x99", "act11", "-act11counter", "199"},
+			Args:  []string{"act1", "--act1counter", "0x99", "act11", "--act11counter", "199"},
 			expectedResult: TestStruct{
 				Act1: struct {
 					Act1Counter *uint32 `base:"16"`
@@ -289,11 +294,11 @@ func TestMyflags(t *testing.T) {
 					},
 				},
 			},
-			expectedActs: []string{"Act1", "Act11"},
+			expectedActs: []string{"act1", "act11"},
 		},
 		{ //case 17
 			input: TestStruct{},
-			Args:  []string{"act1", "-act1counter", "99", "act121", "-act1counter", "199"},
+			Args:  []string{"act1", "--act1counter", "99", "act121", "--act1counter", "199"},
 			expectedResult: TestStruct{
 				Act1: struct {
 					Act1Counter *uint32 `base:"16"`
@@ -307,12 +312,12 @@ func TestMyflags(t *testing.T) {
 					},
 				},
 			},
-			expectedActs: []string{"Act1"},
+			expectedActs: []string{"act1"},
 			shouldFail:   true,
 		},
 		{ //case 18, should fail
 			input: TestStruct{},
-			Args:  []string{"-xxxxx", "1.1.1.1,1.1.1.2"},
+			Args:  []string{"--xxxxx", "1.1.1.1,1.1.1.2"},
 			expectedResult: TestStruct{
 				AddrSlice: []*netip.Addr{createPAddr("1.1.1.1")},
 			},
@@ -320,7 +325,7 @@ func TestMyflags(t *testing.T) {
 		},
 		{ //case 19, testing 0x
 			input: TestStruct{},
-			Args:  []string{"act1", "-act1counter", "0x99"},
+			Args:  []string{"act1", "--act1counter", "0x99"},
 			expectedResult: TestStruct{
 				Act1: struct {
 					Act1Counter *uint32 `base:"16"`
@@ -331,11 +336,11 @@ func TestMyflags(t *testing.T) {
 					Act1Counter: createInt[uint32](0x99),
 				},
 			},
-			expectedActs: []string{"Act1"},
+			expectedActs: []string{"act1"},
 		},
 		{ //case 20, action with globla bool
 			input: TestStruct{},
-			Args:  []string{"-boolvar", "act1", "-act1counter", "0x99"},
+			Args:  []string{"--boolvar", "act1", "--act1counter", "0x99"},
 			expectedResult: TestStruct{
 				BoolVar: true,
 				Act1: struct {
@@ -347,7 +352,7 @@ func TestMyflags(t *testing.T) {
 					Act1Counter: createInt[uint32](0x99),
 				},
 			},
-			expectedActs: []string{"Act1"},
+			expectedActs: []string{"act1"},
 			shouldFail:   false,
 		},
 	}

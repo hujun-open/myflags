@@ -1,6 +1,7 @@
 package myflags
 
 import (
+	"bytes"
 	"encoding"
 
 	// "flag"
@@ -42,12 +43,14 @@ const (
 // Filler auto-generates one or multiple flag.FlagSet based on an input struct
 type Filler struct {
 	*cobra.Command
-	fsMap     map[string]*Filler //child fillers, key is the action name
-	fs        *flag.FlagSet
-	errHandle flag.ErrorHandling
-	optList   []FillerOption
-	usage     string //this is the usage string for for overall filler
-	renamer   RenameFunc
+	fsMap              map[string]*Filler //child fillers, key is the action name
+	fs                 *flag.FlagSet
+	errHandle          flag.ErrorHandling
+	optList            []FillerOption
+	usage              string //this is the usage string for for overall filler
+	renamer            RenameFunc
+	includeDocGenCMD   bool
+	includeSummaryHelp bool
 }
 
 // FillerOption is an option when creating new Filler
@@ -129,6 +132,56 @@ func (filler *Filler) addNewAct(act, usage string, method RunMethod) {
 	filler.fsMap[act] = newInheritFiller(filler, act, usage, method)
 }
 
+// SummaryUsageStr returns a usage string that include usage of flags, child commands and their children
+func SummaryUsageStr(cmd *cobra.Command, prefix string) string {
+	step := "  "
+	indent := prefix + step
+	buf := new(bytes.Buffer)
+	fmt.Fprintf(buf, "%v\n", cmd.Short)
+	cmd.LocalFlags().VisitAll(func(f *flag.Flag) {
+		if f.Shorthand == "" {
+			fmt.Fprintf(buf, "%v--%v: %v\n", indent, f.Name, f.Usage)
+		} else {
+			fmt.Fprintf(buf, "%v-%v, --%v: %v\n", indent, f.Shorthand, f.Name, f.Usage)
+		}
+
+		if f.DefValue != "" {
+			fmt.Fprintf(buf, "%v\tdefault:%v\n", indent, f.DefValue)
+		}
+	})
+
+	for _, childCMD := range cmd.Commands() {
+
+		fmt.Fprintf(buf, "%v= %v: ", indent, childCMD.Name())
+		fmt.Fprint(buf, SummaryUsageStr(childCMD, indent))
+
+	}
+	return buf.String()
+
+}
+
+// SummaryHelpCMDName is the name of command print summary help
+const SummaryHelpCMDName = "summaryhelp"
+
+// SummaryHelpCMD returns a command `summaryhelp` that print summary help  that include usage of flags, child commands and their children
+func (filler *Filler) SummaryHelpCMD() *cobra.Command {
+	return &cobra.Command{
+		Use:   SummaryHelpCMDName,
+		Short: "help in summary",
+		Run: func(c *cobra.Command, args []string) {
+			fmt.Println(SummaryUsageStr(filler.Command, ""))
+		},
+	}
+
+}
+
+// WithSummaryHelp adds a command `summaryhelp` that print summary help  that include usage of flags, child commands and their children
+func WithSummaryHelp() FillerOption {
+	return func(filler *Filler) {
+		filler.includeSummaryHelp = true
+	}
+}
+
 // Fill filler with struct in
 func (filler *Filler) Fill(in any) error {
 	t := reflect.TypeOf(in)
@@ -137,9 +190,12 @@ func (filler *Filler) Fill(in any) error {
 		if err != nil {
 			return err
 		}
-		// if filler.withCompletionCMD {
-		// 	filler.addNewAct("complete", CompleteCMDName, "generate completion script", filler.GenCompletionScript, false)
-		// }
+		if filler.includeDocGenCMD {
+			filler.AddCommand(docFiller.Command)
+		}
+		if filler.includeSummaryHelp {
+			filler.AddCommand(filler.SummaryHelpCMD())
+		}
 		return nil
 	} else {
 		return fmt.Errorf("only support a pointer to struct, but got %v", t)
@@ -550,9 +606,11 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix string, isAct boo
 // "completion" and "help" are used if they are empty string.
 // it also return true if cmd is the root command and skipRootCMD is true,
 func IsOwnAction(cmd *cobra.Command, completionCMDName, helpCMDName string, skipRootCMD bool) bool {
-	if cmd.Name() == "__complete" {
+	switch cmd.Name() {
+	case cobra.ShellCompRequestCmd, cobra.ShellCompNoDescRequestCmd, DocgenCMDName, SummaryHelpCMDName:
 		return true
 	}
+
 	if cmd.Root() == cmd {
 		if skipRootCMD {
 			return true

@@ -77,6 +77,7 @@ type factory[T any] struct{}
 func (f *factory[T]) process(fs *flag.FlagSet, ref reflect.Value, tag reflect.StructTag, name, short, usage string) {
 	// if ref.Type().Elem().Kind()
 	isbool := false
+
 	if reflect.TypeOf(*new(T)).Kind() == reflect.Bool {
 		isbool = true
 	}
@@ -84,11 +85,15 @@ func (f *factory[T]) process(fs *flag.FlagSet, ref reflect.Value, tag reflect.St
 	conv := globalRegistry.GetViaInterface(ref.Interface())
 	newval := newSimpleType[T](conv.FromStr, conv.ToStr, tag, isbool)
 	newval.SetRef(casted)
-	if strings.TrimSpace(short) == "" {
-		fs.Var(&newval, name, usage)
-	} else {
-		fs.VarP(&newval, name, short, usage)
+	short = strings.TrimSpace(short)
+	// if strings.TrimSpace(short) == "" {
+	// 	fs.Var(&newval, name, usage)
+	// } else {
+	ff := fs.VarPF(&newval, name, short, usage)
+	if isbool {
+		ff.NoOptDefVal = "true"
 	}
+	// }
 }
 
 func (v *simpleType[T]) SetRef(t *T) {
