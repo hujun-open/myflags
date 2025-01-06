@@ -11,10 +11,10 @@ import (
 )
 
 type ZipCLI struct {
-	ConfigFile string `short:"c" usage:"working profile"`
-	MyAddr     net.IP `usage:"my ip addresss"`
-	AddrList   []netip.Addr
-	Compress   struct {
+	ConfigFile     string       `short:"c" usage:"working profile"`
+	SvrAddr        net.IP       `usage:"server address to download the archive"`
+	BackupAddrList []netip.Addr `usage:"backup server address list"`
+	Compress       struct {
 		Loop      uint   `base:"16" short:"l" usage:"number of compress iterations"`
 		Profile   string `usage:"compress profile" choices:"p1,p2,p3"`
 		Skip      bool
@@ -50,33 +50,34 @@ func (zipcli *ZipCLI) Comp(cmd *cobra.Command, args []string) {
 	fmt.Printf("compress %+v\n", zipcli)
 }
 
+func (zipcli *ZipCLI) RootCMD(cmd *cobra.Command, args []string) {
+	fmt.Printf("root %+v\n", zipcli)
+}
+
 func main() {
-	//create a new filler with the application name and its description.
-	filler := myflags.NewFiller("cptool", "a zip command", myflags.WithDocGenCMD(), myflags.WithSummaryHelp())
 	//some default values
 	zipcli := ZipCLI{
 		ConfigFile: "default.conf",
 	}
 	zipcli.Compress.Loop = 0x20
 	zipcli.Compress.ZipFile.FileName = "defaultzip.file"
+
+	//create a filler with the application name and its description.
+	filler := myflags.NewFiller("cptool", "a zip command",
+		myflags.WithDocGenCMD(),
+		myflags.WithSummaryHelp(),
+		myflags.WithRootMethod(zipcli.RootCMD),
+	)
+
 	//call Fill
 	err := filler.Fill(&zipcli)
 	if err != nil {
 		panic(err)
 	}
-	//call Execute to fill zipcli with parsed values from input
-	// err = filler.Execute()
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// inbuf := bytes.NewBufferString(`.\cptool.exe --myaddr 1.1.1.1`)
-	// filler.SetIn(inbuf)
-	// filler.SetArgs([]string{"--myaddr", "1.1.1.1"})
+	//call ExcuteC or any cobra command Execute command
 	cmd, err := filler.ExecuteC()
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("path is", cmd.CommandPath())
-
-	fmt.Printf("result is %+v", zipcli)
+	fmt.Println("command path is", cmd.CommandPath())
 }

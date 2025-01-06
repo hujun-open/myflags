@@ -6,7 +6,10 @@ myflags is a Golang module to make creating command line application easy, it bu
 1.  Instead of creating commands, sub-commands and flags manually, user could simply define all the commands/flags in a struct, myflags automatically creates command/flags based on the struct definition and parsed result get automatically assigned to the struct field that corresponding to the flag. 
     - Some common cobra command attribute likes shorthand name, usage, auto-completion choices could be specified as struct field tags 
 2. In addition to the types supported by cobra, myflags provides capability to extend support for new types as flag, user could even provide myflags support for existing types without creating alias type
+    - this is achieved by implement `RegisteredConverters` interface
     - `types` sub module provides support for some existing golang types like time.Time
+3. support any slice/array as flag with element type that implements `RegisteredConverters` interface
+4. optional `summaryhelp` command to print usage for the entire command tree
 
 
 
@@ -17,43 +20,67 @@ myflags is a Golang module to make creating command line application easy, it bu
 Using myflags is straight forward:
 
 1. define all commands/flags in a struct, each command is a sub-struct with tag "action", the value of the tag specifies a struct method gets called when the corresponding command is entered in CLI.
-2. create a `Filler` with the struct, call `Fill` method with the struct variable with default value. 
+    - a root command method could be optionally specified when creating filler 
+2. create a `Filler`, and call `Fill` method with the struct variable with default value. 
 3. call one of cobra's command execute method like `Filler.Execute`
 
 Following is an example:
-https://github.com/hujun-open/myflags/blob/2fd27463cabdc368b87aecc7addbb42f5535abc6/example/main.go#L1-L45
+https://github.com/hujun-open/myflags/blob/cobra/example/main.go
 the created flags:
 ```
-.\cptool.exe -?
+.\cptool summaryhelp
 a zip command
-  - configfile: working profile
+  --backupaddrlist: backup server address list
+  -c, --configfile: working profile
         default:default.conf
-  = compress: to compress things
-    - loop: number of compress iterations
-        default:0x20
-    - profile:
-    - s:
+  --svraddr: server address to download the archive
+        default:<nil>
+  = completion: Generate the autocompletion script for the specified shell
+    = bash: Generate the autocompletion script for bash
+      --no-descriptions: disable completion descriptions
         default:false
-    = dryrun: dry run, doesn't actually create any file
-    = zipfolder: zip a folder
-      - folder: specify folder name
+    = fish: Generate the autocompletion script for fish
+      --no-descriptions: disable completion descriptions
+        default:false
+    = powershell: Generate the autocompletion script for powershell
+      --no-descriptions: disable completion descriptions
+        default:false
+    = zsh: Generate the autocompletion script for zsh
+      --no-descriptions: disable completion descriptions
+        default:false
+  = compress: to compress things
+    -l, --loop: number of compress iterations
+        default:0x20
+    --profile: compress profile
+    --skip:
+        default:false
+    = dry: dry run, doesn't actually create any file
     = zipfile: zip a file
-      - f: specify file name
+      --filename: specify file name
         default:defaultzip.file
+    = zipfolder: zip a folder
+      --foldername: specify folder name
+  = docgen: generate docs
+    --output: output folder
+        default:./
+    = manpage: generate manpage doc
+      --section: manpage section
+        default:3
+      --title: manpage title
+    = markdown: generate markdown doc
   = extract: to unzip things
-    - inputfile: input zip file
-  = help: help
+    --inputfile: input zip file
+  = help: Help about any command
+  = summaryhelp: help in summary
+    -h, --help: help for summaryhelp
+        default:false
+
 ```
 some parsing results:
 ```
-.\cptool.exe -configfile cp.conf compress -profile my.profile -s zipfilder -folder ./bigfolder/
-parsed actions [Compress]
-{ConfigFile:cp.conf Compress:{Loop:32 Profile:my.profile Skip:true NoFlag: DryRun:{} ZipFolder:{FolderName:} ZipFile:{FileName:defaultzip.file}} Extract:{InputFile:} Help:{}}
-
-.\cptool.exe -configfile cp.conf compress -loop 100 dryrun
-parsed actions [Compress DryRun]
-{ConfigFile:cp.conf Compress:{Loop:100 Profile: Skip:false NoFlag: DryRun:{} ZipFolder:{FolderName:} ZipFile:{FileName:defaultzip.file}} Extract:{InputFile:} Help:{}}
-
+.\cptool --svraddr 1.1.1.1 --backupaddrlist 2.2.2.2,2001:dead::1 compress -l 3  zipfile           
+zipfile &{ConfigFile:default.conf SvrAddr:1.1.1.1 BackupAddrList:[2.2.2.2 2001:dead::1] Compress:{Loop:3 Profile: Skip:false NoFlag: DryRun:{} ZipFolder:{FolderName:} ZipFile:{FileName:defaultzip.file}} Extract:{InputFile:}}
+command path is cptool compress zipfile
 ```
 ## Struct Field Tags
 Following struct field tags are supported:
@@ -61,7 +88,9 @@ Following struct field tags are supported:
 - skipflag: skip the field for flagging
 - alias: use the specified alias as the name of the parameter
 - usage: the usage string of the parameter
-- action: this field is an action 
+- action: this field is an action, the value is the method name to run
+- required: this field is a mandatory required flag
+- choices: a comma separated list of value choices for the field, used for auto completion
 
 
 ## Supported Types

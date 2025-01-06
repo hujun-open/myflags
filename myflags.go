@@ -70,6 +70,14 @@ func WithFlagErrHandling(h flag.ErrorHandling) FillerOption {
 	}
 }
 
+// WithRootMethod set f as the Run method for the root command,
+// if f is nil, then use filler.Root
+func WithRootMethod(f RunMethod) FillerOption {
+	return func(filler *Filler) {
+		filler.Command.Root().Run = f
+	}
+}
+
 // NewFiller creates a new Filler,
 // name is the name for the command, usage is the overall usage introduction.
 // optionally, a list of FillerOptions could be specified.
@@ -78,6 +86,10 @@ func NewFiller(name, usage string, options ...FillerOption) *Filler {
 	r := &Filler{
 		errHandle: DefaultErrHandle,
 		renamer:   DefaultRenamer,
+		Command: &cobra.Command{
+			Use:   name,
+			Short: usage,
+		},
 	}
 	for _, o := range options {
 		o(r)
@@ -86,10 +98,6 @@ func NewFiller(name, usage string, options ...FillerOption) *Filler {
 	r.fs = flag.NewFlagSet(name, r.errHandle)
 	r.usage = usage
 	r.optList = options
-	r.Command = &cobra.Command{
-		Use:   name,
-		Short: usage,
-	}
 
 	return r
 }
