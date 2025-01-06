@@ -209,7 +209,6 @@ func (filler *Filler) GetFlagset() *flag.FlagSet {
 }
 
 func setStandardFlagType(fs *flag.FlagSet, ref reflect.Value, name, short, usage string) {
-	// fmt.Println(1111111111111111, name)
 	switch ref.Elem().Kind() {
 	case reflect.String:
 		casted := ref.Interface().(*string)

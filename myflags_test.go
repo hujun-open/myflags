@@ -238,7 +238,7 @@ func TestMyflags(t *testing.T) {
 		},
 		{ //case 12
 			input: TestStruct{},
-			Args:  []string{"--addrnpslice", "1.1.1.1,2001:dead::beef"},
+			Args:  []string{"--addrnpslice", "1.1.1.1, 2001:dead::beef "},
 			expectedResult: TestStruct{
 				AddrNPSlice: []netip.Addr{
 					*createPAddr("1.1.1.1"),
@@ -317,7 +317,7 @@ func TestMyflags(t *testing.T) {
 		},
 		{ //case 18, should fail
 			input: TestStruct{},
-			Args:  []string{"--xxxxx", "1.1.1.1,1.1.1.2"},
+			Args:  []string{"--xxxxx", "1.1.1.1, 1.1.1.2 "},
 			expectedResult: TestStruct{
 				AddrSlice: []*netip.Addr{createPAddr("1.1.1.1")},
 			},

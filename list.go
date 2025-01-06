@@ -57,7 +57,8 @@ func (list *listType) Set(s string) error {
 	isElmPointer := list.val.Type().Elem().Elem().Kind() == reflect.Pointer
 	isArray := list.val.Type().Elem().Kind() == reflect.Array
 	list.val.Elem().SetZero()
-	for i, ns := range strings.Split(s, ",") {
+	for i, ns := range strings.FieldsFunc(s, func(c rune) bool { return c == ',' }) {
+		ns = strings.TrimSpace(ns)
 		n, err := list.conv.FromStr(ns, list.tags)
 		if err != nil {
 			return err
