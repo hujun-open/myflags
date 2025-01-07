@@ -11,8 +11,7 @@ myflags is a Golang module to make creating command line application easy, it bu
 3. support any slice/array as flag with element type that implements `RegisteredConverters` interface
 4. optional `summaryhelp` command to print usage for the entire command tree
 
-
-
+note: current release is v2, the package path is `"github.com/hujun-open/myflags/v2"`
 
 
 
@@ -25,7 +24,7 @@ Using myflags is straight forward:
 3. call one of cobra's command execute method like `Filler.Execute`
 
 Following is an example:
-https://github.com/hujun-open/myflags/blob/cobra/example/main.go
+https://github.com/hujun-open/myflags/blob/v2/example/main.go
 the created flags:
 ```
 .\cptool summaryhelp
@@ -95,12 +94,22 @@ Following struct field tags are supported:
 
 ## Supported Types
 Base:
-- all int/uint types: support `base` tag for the base
+- all int/uint types
 - float32/float64
 - string
 - bool
+
+provided by `github.com/hujun-open/myflags/v2/types`:
+
+- all int/uint types: support `base` tag for the base
+- net.HardwareAddr
+- net.IPNet
+- net.IP
+- time.Time
 - time.Duration
-- time.Time: supports `layout` tag for time layout string
+- all int/uint types
+
+Others:
 - All types implement both of following interface:
     - `encoding.TextUnmarshaler`
     - `encoding.TextUnmarshaler`
@@ -109,11 +118,11 @@ Base:
 Note: flag is only created for exported struct field.
 
 
-In addition to base types, following types are also supported:
+In addition to above types, following types are also supported:
 
-- pointer to the base type 
-- slice/array of base type
-- slice/array of pointer to the base type
+- pointer to the type above
+- slice/array of type above
+- slice/array of pointer to the type above
 
 for slice/array, use "," as separator. 
 
@@ -148,7 +157,21 @@ Optionally a renaming function could be supplied when creating the `Filler`, myf
 ## Extension
 New type could be supported via `myflags.Register`, which takes a variable implements `myflags.RegisteredConverters` interface. the `myflags.Register` must be called before `myflags.Fill`, typically it should be called in `init()`.
 
-Check [time.go](time.go), [inttype.go](inttype.go) for examples.
+Check [types.go](types/types.go), [types_int.go](types/types_int.go) for examples.
+
+## Builtin Commands
+Myflags support following builtin commands:
+
+- `help`: same as cobra help command, always included
+- `completion`: generate completion script for varies shell, same as cobra, always included
+- `docgen`: doc generation command, currently support markdown and manpage, use cobra's doc generation lib, include via `WithDocGenCMD()`
+- `summaryhelp`: print usage for whole command tree, include via `WithSummaryHelp()`
+
 
 ## Bool
-myflags use standard Golang module `flag`, [which doesn't support "-flag x" format for bool](https://pkg.go.dev/flag). using "-flag x" for bool could cause silent failure that input parameters after bool don't get parsed.
+myflags support bool flag with following format:
+
+- `--flag` (meaning true)
+- `--flag=<true|false>`
+
+`--flag <true|false>` is not supported

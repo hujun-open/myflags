@@ -75,9 +75,9 @@ func main() {
 		panic(err)
 	}
 	//call ExcuteC or any cobra command Execute command
-	cmd, err := filler.ExecuteC()
+	err = filler.Execute()
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println("command path is", cmd.CommandPath())
+
 }

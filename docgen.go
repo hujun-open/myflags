@@ -48,7 +48,7 @@ func defGenDoc() *genDoc {
 	return r
 }
 
-// DocgenCMDName is the optional hidden command to generate docs
+// DocgenCMDName is the optional command to generate docs
 const DocgenCMDName = "docgen"
 
 var genDocSetup *genDoc
@@ -63,7 +63,6 @@ func init() {
 		docFiller = nil
 		return
 	}
-	docFiller.Hidden = true
 
 }
 
@@ -73,48 +72,3 @@ func WithDocGenCMD() FillerOption {
 		filler.includeDocGenCMD = true
 	}
 }
-
-// var outputType string = "markdown"
-
-// var docGenCommand = &cobra.Command{
-// 	Use:    "gendoc",
-// 	Short:  "generate documentation",
-// 	Hidden: true,
-// }
-
-// func init() {
-// 	// docGenCommand.Flags().StringVarP(&outputType, "type", "t", "markdown", "output type")
-// 	docGenCommand.AddCommand(&cobra.Command{
-// 		Use:     "markdown",
-// 		Short:   "generate markdown doc",
-// 		Example: "markdown <output_folder>",
-// 		Hidden:  true,
-// 		Run: func(cmd *cobra.Command, args []string) {
-// 			outputFolder := "./"
-// 			if len(args) > 0 {
-// 				outputFolder = args[0]
-// 			}
-// 			err := doc.GenMarkdownTree(cmd.Root(), outputFolder)
-// 			if err != nil {
-// 				log.Fatal(err)
-// 			}
-// 		},
-// 	})
-// 	docGenCommand.AddCommand(&cobra.Command{
-// 		Use:     "manpage",
-// 		Short:   "generate manpage",
-// 		Example: "manpage ",
-// 		Hidden:  true,
-// 		Run: func(cmd *cobra.Command, args []string) {
-// 			outputFolder := "./"
-// 			if len(args) > 0 {
-// 				outputFolder = args[0]
-// 			}
-// 			err := doc.GenMarkdownTree(cmd.Root(), outputFolder)
-// 			if err != nil {
-// 				log.Fatal(err)
-// 			}
-// 		},
-// 	})
-
-// }
