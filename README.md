@@ -24,7 +24,8 @@ Using myflags is straight forward:
 3. call one of cobra's command execute method like `Filler.Execute`
 
 Following is an example:
-https://github.com/hujun-open/myflags/blob/v2/example/main.go
+https://github.com/hujun-open/myflags/blob/2635352af91e5628122b0e6077ac4fba0fd20619/example/main.go#L1-L83
+
 the created flags:
 ```
 .\cptool summaryhelp
