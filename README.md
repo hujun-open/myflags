@@ -1,5 +1,5 @@
 [![Go package](https://github.com/hujun-open/myflags/actions/workflows/CI.yaml/badge.svg)](https://github.com/hujun-open/myflags/actions/workflows/CI.yaml)
-[![PkgGoDev](https://pkg.go.dev/badge/github.com/hujun-open/myflags)](https://pkg.go.dev/github.com/hujun-open/myflags)
+[![PkgGoDev](https://pkg.go.dev/badge/github.com/hujun-open/myflags)](https://pkg.go.dev/github.com/hujun-open/myflags/v2)
 # myflags
 myflags is a Golang module to make creating command line application easy, it built on top of [cobra](https://cobra.dev/), provides following **additional** features:
 
