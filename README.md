@@ -1,5 +1,5 @@
 [![Go package](https://github.com/hujun-open/myflags/actions/workflows/CI.yaml/badge.svg)](https://github.com/hujun-open/myflags/actions/workflows/CI.yaml)
-[![PkgGoDev](https://pkg.go.dev/badge/github.com/hujun-open/myflags)](https://pkg.go.dev/github.com/hujun-open/myflags)
+[![PkgGoDev](https://pkg.go.dev/badge/github.com/hujun-open/myflags)](https://pkg.go.dev/github.com/hujun-open/myflags/v2)
 # myflags
 myflags is a Golang module to make creating command line application easy, it built on top of [cobra](https://cobra.dev/), provides following **additional** features:
 
@@ -24,7 +24,8 @@ Using myflags is straight forward:
 3. call one of cobra's command execute method like `Filler.Execute`
 
 Following is an example:
-https://github.com/hujun-open/myflags/blob/v2/example/main.go
+https://github.com/hujun-open/myflags/blob/2635352af91e5628122b0e6077ac4fba0fd20619/example/main.go#L1-L83
+
 the created flags:
 ```
 .\cptool summaryhelp
