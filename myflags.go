@@ -677,3 +677,13 @@ func (filler *Filler) GetChildCommand(childpath string) *cobra.Command {
 	}
 	return curCMD
 }
+
+// ExecutePath run filler.ExecuteC() and return the executed command and full command path as slice of string,
+// first level sub-command name invoked is the first item in the slice.
+func (filler *Filler) ExecuteCMDPath() (*cobra.Command, []string, error) {
+	cmd, err := filler.ExecuteC()
+	if err != nil {
+		return nil, nil, err
+	}
+	return cmd, strings.Fields(cmd.CommandPath())[1:], nil
+}

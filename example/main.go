@@ -29,7 +29,7 @@ type ZipCLI struct {
 	} `usage:"to compress things" action:"Comp"`
 	Extract struct {
 		InputFile string `usage:"input zip file"`
-	} `usage:"to unzip things" action:"Extr"`
+	} `usage:"to unzip things" action:""`
 }
 
 func (zipcli *ZipCLI) Dry(cmd *cobra.Command, args []string) {
@@ -74,10 +74,9 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	//call ExcuteC or any cobra command Execute command
+	//call Excute or any other Execute method
 	err = filler.Execute()
 	if err != nil {
 		panic(err)
 	}
-
 }
