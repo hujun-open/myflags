@@ -204,6 +204,12 @@ func (filler *Filler) Fill(in any) error {
 		if filler.includeSummaryHelp {
 			filler.AddCommand(filler.SummaryHelpCMD())
 		}
+
+		if len(filler.Commands()) == 0 {
+			if !filler.Runnable() {
+				filler.Run = DefRunMethod //this is needed otherwise, the "-h" or "--help" won't work
+			}
+		}
 		return nil
 	} else {
 		return fmt.Errorf("only support a pointer to struct, but got %v", t)
