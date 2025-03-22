@@ -87,6 +87,7 @@ Following struct field tags are supported:
 
 - skipflag: skip the field for flagging
 - alias: use the specified alias as the name of the parameter
+- short: use the specified string as the shorthand parameter name
 - usage: the usage string of the parameter
 - action: this field is an action, the value is the method name to run
 - required: this field is a mandatory required flag
