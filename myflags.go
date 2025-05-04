@@ -51,6 +51,8 @@ type Filler struct {
 	renamer            RenameFunc
 	includeDocGenCMD   bool
 	includeSummaryHelp bool
+	nounVal            reflect.Value //the noun field value
+	nounTag            reflect.StructTag
 }
 
 // FillerOption is an option when creating new Filler
@@ -127,6 +129,8 @@ const (
 	RequiredTag = "required"
 	//ValidValuesTag is a list of valid values for the field, separated by comma, used for completion
 	ValidValuesTag = "choices"
+	//NounTag marks a field as noun for a command, there is only one field will be treated as noun per (sub-)struct
+	NounTag = "noun"
 )
 
 // RunMethod is the type of function could be used as cobra.Command.Run
@@ -396,6 +400,7 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix string, isAct boo
 	}
 	ElemK := inV.Elem().Kind()
 	validFlagValsMap := make(map[string]string)
+	// flagCompleteFuncMap:=make(map[string]cobra.com)
 	defer func() {
 		if isAct {
 			filler.PersistentFlags().AddFlagSet(fs)
@@ -443,9 +448,17 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix string, isAct boo
 				if !isSupportedKind(fieldT.Type.Kind()) {
 					continue
 				}
-
 				//get tags
 				if _, exists := fieldT.Tag.Lookup(SkipTag); exists {
+					continue
+				}
+				//check if it is noun field
+				if _, exists := fieldT.Tag.Lookup(NounTag); exists {
+					filler.nounVal = field
+					filler.nounTag = fieldT.Tag
+					filler.Command.PreRunE = func(cmd *cobra.Command, args []string) error {
+						return filler.parseNoun(args)
+					}
 					continue
 				}
 				usage, _ := fieldT.Tag.Lookup(UsageTag)

@@ -88,7 +88,7 @@ func (list *listType) Set(s string) error {
 	return nil
 }
 
-func processList(fs *flag.FlagSet, ref reflect.Value, tag reflect.StructTag, name, usage string) error {
+func getListType(ref reflect.Value, tag reflect.StructTag) (*listType, error) {
 	rconv := globalRegistry.GetViaType(ref.Type().Elem().Elem())
 	var newval listType
 	if rconv == nil {
@@ -107,12 +107,20 @@ func processList(fs *flag.FlagSet, ref reflect.Value, tag reflect.StructTag, nam
 			newval = listType{val: ref, tags: tag,
 				conv: &textMarshalConverter{unmarshaller: unm.Interface().(encoding.TextUnmarshaler)}}
 		} else {
-			return fmt.Errorf("%v is not registered", ref.Type().Elem().Elem())
+			return nil, fmt.Errorf("%v is not registered", ref.Type().Elem().Elem())
 		}
 
 	} else {
 		newval = listType{val: ref, tags: tag, conv: rconv}
 	}
-	fs.Var(&newval, name, usage)
+	return &newval, nil
+}
+
+func processList(fs *flag.FlagSet, ref reflect.Value, tag reflect.StructTag, name, usage string) error {
+	newlist, err := getListType(ref, tag)
+	if err != nil {
+		return err
+	}
+	fs.Var(newlist, name, usage)
 	return nil
 }

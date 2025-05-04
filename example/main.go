@@ -21,7 +21,8 @@ type ZipCLI struct {
 		NoFlag    string   `skipflag:""` //ignore this field for flagging
 		DryRun    struct{} `alias:"dry" usage:"dry run, doesn't actually create any file" action:"Dry"`
 		ZipFolder struct {
-			FolderName string `usage:"specify folder name"`
+			FolderName string   `usage:"specify folder name"`
+			ValIP      []net.IP `noun:""`
 		} `usage:"zip a folder" action:"ZipFolder"`
 		ZipFile struct {
 			FileName string `usage:"specify file name"`
