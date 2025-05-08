@@ -25,7 +25,7 @@ Using myflags is straight forward:
 3. call one of cobra's command execute method like `Filler.Execute`
 
 Following is an example:
-https://github.com/hujun-open/myflags/blob/2635352af91e5628122b0e6077ac4fba0fd20619/example/main.go#L1-L83
+https://github.com/hujun-open/myflags/blob/a06b78dbf363c27240d07e59919d9eaf3b03da96/example/main.go#L1-L89
 
 the created flags:
 ```
