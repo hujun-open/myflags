@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hujun-open/cobra"
 	flag "github.com/hujun-open/pflag"
 
 	"github.com/hujun-open/myflags/v2"
@@ -59,6 +60,8 @@ type Sub struct {
 }
 
 type TestStruct struct {
+	Arg1 string    `noun:"1" usage:"arg1 is a string"`
+	Arg2 time.Time `noun:"2" usage:"arg2 is a time"`
 	Sub
 	Sub1 Sub `action:""`
 	Act1 struct {
@@ -92,6 +95,7 @@ func (tc *testCase) do(t *testing.T) error {
 	fflag := tc.errh
 	filler := myflags.NewFiller(
 		"test", "", myflags.WithFlagErrHandling(fflag),
+		myflags.WithRootMethod(func(cmd *cobra.Command, args []string) {}), //without this, root command's positional arg won't get parsed
 	)
 	err := filler.Fill(&tc.input)
 	if err != nil {
@@ -353,6 +357,17 @@ func TestMyflags(t *testing.T) {
 				},
 			},
 			expectedActs: []string{"act1"},
+			shouldFail:   false,
+		},
+		{ //case 21, nouns
+			input: TestStruct{},
+			errh:  flag.PanicOnError,
+			Args:  []string{"disk", "2002-03-04 11:22:33"},
+			expectedResult: TestStruct{
+				Arg1: "disk",
+				Arg2: time.Date(2002, 3, 4, 11, 22, 33, 0, time.UTC),
+			},
+			expectedActs: []string{},
 			shouldFail:   false,
 		},
 	}

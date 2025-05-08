@@ -18,8 +18,9 @@ note: current release is v2, the package path is `"github.com/hujun-open/myflags
 ## Quick Start 
 Using myflags is straight forward:
 
-1. define all commands/flags in a struct, each command is a sub-struct with tag "action", the value of the tag specifies a struct method gets called when the corresponding command is entered in CLI.
-    - a root command method could be optionally specified when creating filler 
+1. define all commands/flags in a struct, each command is a sub-struct with tag `action`, the value of the tag specifies a struct method gets called when the corresponding command is entered in CLI. 
+    - a root command method could be optionally specified when creating filler with `WithRootMethod`
+    - command could be nested, e.g. subcommand could have its subcommand, which is nested struct with `action` tag
 2. create a `Filler`, and call `Fill` method with the struct variable with default value. 
 3. call one of cobra's command execute method like `Filler.Execute`
 
@@ -29,62 +30,78 @@ https://github.com/hujun-open/myflags/blob/2635352af91e5628122b0e6077ac4fba0fd20
 the created flags:
 ```
 .\cptool summaryhelp
-a zip command
-  --backupaddrlist: backup server address list
-  -c, --configfile: working profile
+  = cptool <Arg1> [flags]
+    <Arg1>: arg for root command
+      default:""
+    --backupaddrlist: backup server address list
+    -c, --configfile: working profile
         default:default.conf
-  --svraddr: server address to download the archive
+    --svraddr: server address to download the archive
         default:<nil>
-  = completion: Generate the autocompletion script for the specified shell
-    = bash: Generate the autocompletion script for bash
-      --no-descriptions: disable completion descriptions
-        default:false
-    = fish: Generate the autocompletion script for fish
-      --no-descriptions: disable completion descriptions
-        default:false
-    = powershell: Generate the autocompletion script for powershell
-      --no-descriptions: disable completion descriptions
-        default:false
-    = zsh: Generate the autocompletion script for zsh
-      --no-descriptions: disable completion descriptions
-        default:false
-  = compress: to compress things
-    -l, --loop: number of compress iterations
+    = cptool compress
+      -l, --loop: number of compress iterations
         default:0x20
-    --profile: compress profile
-    --skip:
+      --profile: compress profile
+      --skip:
         default:false
-    = dry: dry run, doesn't actually create any file
-    = zipfile: zip a file
-      --filename: specify file name
-        default:defaultzip.file
-    = zipfolder: zip a folder
-      --foldername: specify folder name
-  = docgen: generate docs
-    --output: output folder
+      = cptool compress dry
+      = cptool compress zipfile <FileName> <ArchiveName>
+        <FileName>: input file name
+          default:"defaultzip.file"
+        <ArchiveName>: output archive name
+          default:""
+      = cptool compress zipfolder <FolderName> <ArchiveName> <CreationTime>
+        <FolderName>: input folder name
+          default:""
+        <ArchiveName>: output archive name
+          default:""
+        <CreationTime>: creation time
+          default:"2025 02 Jan 03:04"
+    = cptool extract <InputFile> <OutputFolder>
+      <InputFile>: input archive file
+        default:""
+      <OutputFolder>: output folder
+        default:""
+    = cptool completion
+      = cptool completion bash
+        --no-descriptions: disable completion descriptions
+                default:false
+      = cptool completion fish [flags]
+        --no-descriptions: disable completion descriptions
+                default:false
+      = cptool completion powershell [flags]
+        --no-descriptions: disable completion descriptions
+                default:false
+      = cptool completion zsh [flags]
+        --no-descriptions: disable completion descriptions
+                default:false
+    = cptool docgen
+      --output: output folder
         default:./
-    = manpage: generate manpage doc
-      --section: manpage section
-        default:3
-      --title: manpage title
-    = markdown: generate markdown doc
-  = extract: to unzip things
-    --inputfile: input zip file
-  = help: Help about any command
-  = summaryhelp: help in summary
-    -h, --help: help for summaryhelp
+      = cptool docgen manpage
+        --section: manpage section
+                default:3
+        --title: manpage title
+      = cptool docgen markdown
+    = cptool help [command]
+    = cptool summaryhelp [flags]
+      -h, --help: help for summaryhelp
         default:false
-
 ```
 some parsing results:
 ```
-.\cptool --svraddr 1.1.1.1 --backupaddrlist 2.2.2.2,2001:dead::1 compress -l 3  zipfile           
-zipfile &{ConfigFile:default.conf SvrAddr:1.1.1.1 BackupAddrList:[2.2.2.2 2001:dead::1] Compress:{Loop:3 Profile: Skip:false NoFlag: DryRun:{} ZipFolder:{FolderName:} ZipFile:{FileName:defaultzip.file}} Extract:{InputFile:}}
-command path is cptool compress zipfile
+.\cptool --svraddr 1.1.1.1 --backupaddrlist 2.2.2.2,2001:dead::1 compress -l 3  zipfile  input1 out.zip         
+zipfile &{ConfigFile:default.conf SvrAddr:1.1.1.1 BackupAddrList:[2.2.2.2 2001:dead::1] Arg1: Compress:{Loop:3 Profile: Skip:false NoFlag: DryRun:{} ZipFolder:{FolderName: ArchiveName: CreationTime:2025-01-02 03:04:05 +0000 UTC} ZipFile:{FileName:input1 ArchiveName:out.zip}} Extract:{InputFile: OutputFolder:}}
+
+.\cptool compress zipfolder folder1 out.zip "2030 01 Jun 13:01" -l 99
+zipfolder &{ConfigFile:default.conf SvrAddr:<nil> BackupAddrList:[] Arg1: Compress:{Loop:99 Profile: Skip:false NoFlag: DryRun:{} ZipFolder:{FolderName:folder1 ArchiveName:out.zip CreationTime:2030-06-01 13:01:00 +0000 UTC} ZipFile:{FileName:defaultzip.file ArchiveName:}} Extract:{InputFile: OutputFolder:}}
 ```
+
+
 ## Struct Field Tags
 Following struct field tags are supported:
 
+- noun: mark the field as postional argument, the value is the index; e.g. 1 means first argument, 2 is 2nd argument ..etc
 - skipflag: skip the field for flagging
 - alias: use the specified alias as the name of the parameter
 - short: use the specified string as the shorthand parameter name
@@ -154,7 +171,8 @@ By default, the name of created flag is the lowercase of struct field name, in c
  
 Optionally a renaming function could be supplied when creating the `Filler`, myflags uses the renaming function returned string as the flag name.
 
-
+## Positional Argument
+Positional arguments are the struct field with "noun" tag, the value of the tag is the postional index, start from 1. positional argument only get parsed with a command, which means in case of root command positional argument only get parsed when filler is created with `WithRootMethod`.
 
 ## Extension
 New type could be supported via `myflags.Register`, which takes a variable implements `myflags.RegisteredConverters` interface. the `myflags.Register` must be called before `myflags.Fill`, typically it should be called in `init()`.

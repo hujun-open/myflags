@@ -2,7 +2,9 @@ package myflags
 
 import (
 	"bytes"
+	"cmp"
 	"encoding"
+	"strconv"
 
 	// "flag"
 	"fmt"
@@ -10,6 +12,7 @@ import (
 	"strings"
 
 	flag "github.com/hujun-open/pflag"
+	"golang.org/x/exp/slices"
 
 	"github.com/hujun-open/cobra"
 )
@@ -51,8 +54,8 @@ type Filler struct {
 	renamer            RenameFunc
 	includeDocGenCMD   bool
 	includeSummaryHelp bool
-	nounVal            reflect.Value //the noun field value
-	nounTag            reflect.StructTag
+	nounVals           map[uint]reflect.Value //the noun field values
+	nounFields         map[uint]reflect.StructField
 }
 
 // FillerOption is an option when creating new Filler
@@ -92,6 +95,8 @@ func NewFiller(name, usage string, options ...FillerOption) *Filler {
 			Use:   name,
 			Short: usage,
 		},
+		nounVals:   make(map[uint]reflect.Value),
+		nounFields: make(map[uint]reflect.StructField),
 	}
 	for _, o := range options {
 		o(r)
@@ -144,28 +149,55 @@ func (filler *Filler) addNewAct(act, usage string, method RunMethod) {
 	filler.fsMap[act] = newInheritFiller(filler, act, usage, method)
 }
 
-// SummaryUsageStr returns a usage string that include usage of flags, child commands and their children
-func SummaryUsageStr(cmd *cobra.Command, prefix string) string {
-	step := "  "
-	indent := prefix + step
+const summaryStep = "  "
+
+// SummaryFillerUsageStr returns a usage string that include usage of flags, child commands and their children
+func SummaryFillerUsageStr(filler *Filler, prefix string) string {
+	cmd := filler.Command
+	indent := prefix + summaryStep
 	buf := new(bytes.Buffer)
-	fmt.Fprintf(buf, "%v\n", cmd.Short)
+	fmt.Fprintf(buf, "%v= %v\n", indent, cmd.UseLine())
+	// nounBuf := new(bytes.Buffer)
+	// w := tabwriter.NewWriter(nounBuf, 0, 0, 4, ' ', 0)
+	// if filler.Runnable() {
+	// 	fmt.Fprintf(buf, "  %s\n", filler.UseLine())
+	// }
+
+	// if filler.HasAvailableSubCommands() {
+	// 	fmt.Printf("  %s [command]\n", filler.CommandPath())
+	// }
+	for _, id := range filler.getSortedNounIDs() {
+		defStr := fmt.Sprintf("%s", filler.nounVals[id].Interface())
+		conv := globalRegistry.GetViaInterface(filler.nounVals[id].Interface())
+		if conv != nil {
+			defStr = conv.ToStr(filler.nounVals[id].Interface(), filler.nounFields[id].Tag)
+		}
+		fmt.Fprintf(buf, "  %v<%v>: %v\n",
+			indent,
+			filler.nounFields[id].Name,
+			filler.nounFields[id].Tag.Get(UsageTag),
+		)
+		fmt.Fprintf(buf, "    %vdefault:\"%v\"\n", indent, defStr)
+	}
+	// w.Flush()
+	// fmt.Fprint(buf, nounBuf.String())
+
 	cmd.LocalFlags().VisitAll(func(f *flag.Flag) {
 		if f.Shorthand == "" {
-			fmt.Fprintf(buf, "%v--%v: %v\n", indent, f.Name, f.Usage)
+			fmt.Fprintf(buf, "  %v--%v: %v\n", indent, f.Name, f.Usage)
 		} else {
-			fmt.Fprintf(buf, "%v-%v, --%v: %v\n", indent, f.Shorthand, f.Name, f.Usage)
+			fmt.Fprintf(buf, "  %v-%v, --%v: %v\n", indent, f.Shorthand, f.Name, f.Usage)
 		}
 
 		if f.DefValue != "" {
-			fmt.Fprintf(buf, "%v\tdefault:%v\n", indent, f.DefValue)
+			fmt.Fprintf(buf, "  %v\tdefault:%v\n", indent, f.DefValue)
 		}
 	})
 
-	for _, childCMD := range cmd.Commands() {
+	for _, childFiller := range getSortedMapVals(filler.fsMap) {
 
-		fmt.Fprintf(buf, "%v= %v: ", indent, childCMD.Name())
-		fmt.Fprint(buf, SummaryUsageStr(childCMD, indent))
+		// fmt.Fprintf(buf, "%v= %v: ", indent, childFiller.Use)
+		fmt.Fprint(buf, SummaryFillerUsageStr(childFiller, indent))
 
 	}
 	return buf.String()
@@ -181,7 +213,13 @@ func (filler *Filler) SummaryHelpCMD() *cobra.Command {
 		Use:   SummaryHelpCMDName,
 		Short: "help in summary",
 		Run: func(c *cobra.Command, args []string) {
-			fmt.Println(SummaryUsageStr(filler.Command, ""))
+			fmt.Print(SummaryFillerUsageStr(filler, ""))
+			for _, cmd := range filler.Commands() {
+				if _, ok := filler.fsMap[cmd.Name()]; !ok {
+					fmt.Print(SummaryUsageStr(cmd, summaryStep))
+				}
+			}
+
 		},
 	}
 
@@ -200,6 +238,7 @@ func (filler *Filler) Fill(in any) error {
 	if t.Kind() == reflect.Ptr && t.Elem().Kind() == reflect.Struct {
 		err := filler.walk(reflect.ValueOf(in), reflect.ValueOf(in), "", true)
 		if err != nil {
+
 			return err
 		}
 		if filler.includeDocGenCMD {
@@ -403,19 +442,35 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix string, isAct boo
 	// flagCompleteFuncMap:=make(map[string]cobra.com)
 	defer func() {
 		if isAct {
+			//updateing usage
+			if len(filler.nounFields) > 0 {
+				filler.Use = filler.getUse()
+			}
+			filler.SetUsageFunc(filler.usageFunc)
+			//check if noun id is squential
+			idList := filler.getSortedNounIDs()
+			for i, id := range idList {
+				if i != int(id-1) {
+					ferr = fmt.Errorf("unsequential noun id, expect %d, but get %d", i+1, id)
+				}
+			}
+			if len(idList) > 0 {
+				filler.Command.Args = cobra.MaximumNArgs(len(idList))
+			}
+
 			filler.PersistentFlags().AddFlagSet(fs)
 			for _, f := range requiredFlags {
-				ferr = cobra.MarkFlagRequired(fs, f)
-				if ferr != nil {
-					ferr = fmt.Errorf("failed to mark flag %v required, %w", f, err)
+				derr := cobra.MarkFlagRequired(fs, f)
+				if derr != nil {
+					ferr = fmt.Errorf("failed to mark flag %v required, %w", f, derr)
 					return
 				}
 			}
 			for flagname, valstr := range validFlagValsMap {
 				helper := newValidFlagValues(valstr)
-				ferr = filler.Command.RegisterFlagCompletionFunc(flagname, helper.complete)
-				if ferr != nil {
-					ferr = fmt.Errorf("failed to register flag completion function for %v, %w", flagname, ferr)
+				derr := filler.Command.RegisterFlagCompletionFunc(flagname, helper.complete)
+				if derr != nil {
+					ferr = fmt.Errorf("failed to register flag completion function for %v, %w", flagname, derr)
 					return
 				}
 
@@ -453,9 +508,26 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix string, isAct boo
 					continue
 				}
 				//check if it is noun field
-				if _, exists := fieldT.Tag.Lookup(NounTag); exists {
-					filler.nounVal = field
-					filler.nounTag = fieldT.Tag
+				if ids, exists := fieldT.Tag.Lookup(NounTag); exists {
+					var nounID uint64 = 1
+					if strings.TrimSpace(ids) != "" {
+						nounID, ferr = strconv.ParseUint(ids, 10, 64)
+
+						if ferr != nil {
+							ferr = fmt.Errorf("%v's noun id is not a uint, %w", fieldT.Name, ferr)
+							return ferr
+						}
+						if nounID == 0 {
+							ferr = fmt.Errorf("%v's noun id is 0, but the noun id starts from 1", fieldT.Name)
+							return
+						}
+					}
+					if _, ok := filler.nounVals[uint(nounID)]; ok {
+						ferr = fmt.Errorf("%v'has duplicate noun id", fieldT.Name)
+						return
+					}
+					filler.nounVals[uint(nounID)] = field
+					filler.nounFields[uint(nounID)] = fieldT
 					filler.Command.PreRunE = func(cmd *cobra.Command, args []string) error {
 						return filler.parseNoun(args)
 					}
@@ -506,6 +578,7 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix string, isAct boo
 
 						filler.addNewAct(fname, usage, m)
 						err = filler.fsMap[fname].walk(root, field, fname, true)
+
 						if err != nil {
 							return err
 						}
@@ -705,4 +778,45 @@ func (filler *Filler) ExecuteCMDPath() (*cobra.Command, []string, error) {
 		return nil, nil, err
 	}
 	return cmd, strings.Fields(cmd.CommandPath())[1:], nil
+}
+
+func getSortedMapVals[K cmp.Ordered, V any](m map[K]V) []V {
+	klist := []K{}
+	for k := range m {
+		klist = append(klist, k)
+	}
+	slices.Sort(klist)
+	r := []V{}
+	for _, k := range klist {
+		r = append(r, m[k])
+	}
+	return r
+}
+
+// SummaryUsageStr returns a usage string that include usage of flags, child commands and their children
+func SummaryUsageStr(cmd *cobra.Command, prefix string) string {
+
+	indent := prefix + summaryStep
+	buf := new(bytes.Buffer)
+	fmt.Fprintf(buf, "%v= %v\n", indent, cmd.UseLine())
+	cmd.LocalFlags().VisitAll(func(f *flag.Flag) {
+		if f.Shorthand == "" {
+			fmt.Fprintf(buf, "  %v--%v: %v\n", indent, f.Name, f.Usage)
+		} else {
+			fmt.Fprintf(buf, "  %v-%v, --%v: %v\n", indent, f.Shorthand, f.Name, f.Usage)
+		}
+
+		if f.DefValue != "" {
+			fmt.Fprintf(buf, "  %v\tdefault:%v\n", indent, f.DefValue)
+		}
+	})
+
+	for _, childCMD := range cmd.Commands() {
+
+		// fmt.Fprintf(buf, "%v= %v: ", indent, childCMD.Name())
+		fmt.Fprint(buf, SummaryUsageStr(childCMD, indent))
+
+	}
+	return buf.String()
+
 }

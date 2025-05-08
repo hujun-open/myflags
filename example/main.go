@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"time"
 
 	"github.com/hujun-open/cobra"
 	"github.com/hujun-open/myflags/v2"
@@ -14,6 +15,7 @@ type ZipCLI struct {
 	ConfigFile     string       `short:"c" usage:"working profile"`
 	SvrAddr        net.IP       `usage:"server address to download the archive"`
 	BackupAddrList []netip.Addr `usage:"backup server address list"`
+	Arg1           string       `noun:"1" usage:"arg for root command"` //positional argument for root command
 	Compress       struct {
 		Loop      uint   `base:"16" short:"l" usage:"number of compress iterations"`
 		Profile   string `usage:"compress profile" choices:"p1,p2,p3"`
@@ -21,15 +23,18 @@ type ZipCLI struct {
 		NoFlag    string   `skipflag:""` //ignore this field for flagging
 		DryRun    struct{} `alias:"dry" usage:"dry run, doesn't actually create any file" action:"Dry"`
 		ZipFolder struct {
-			FolderName string   `usage:"specify folder name"`
-			ValIP      []net.IP `noun:""`
+			FolderName   string    `noun:"1" usage:"input folder name"`   //first positional argument for command zipfolder
+			ArchiveName  string    `noun:"2" usage:"output archive name"` //2nd postional argument for command zipfolder
+			CreationTime time.Time `noun:"3" usage:"creation time" layout:"2006 02 Jan 15:04"`
 		} `usage:"zip a folder" action:"ZipFolder"`
 		ZipFile struct {
-			FileName string `usage:"specify file name"`
+			FileName    string `noun:"1" usage:"input file name"`     //first positional argument for command zipfile
+			ArchiveName string `noun:"2" usage:"output archive name"` //2nd postional argument for command zipfile
 		} `usage:"zip a file" action:"ZipFile"`
 	} `usage:"to compress things" action:"Comp"`
 	Extract struct {
-		InputFile string `usage:"input zip file"`
+		InputFile    string `noun:"1" usage:"input archive file"`
+		OutputFolder string `noun:"2" usage:"output folder"`
 	} `usage:"to unzip things" action:""`
 }
 
@@ -62,6 +67,7 @@ func main() {
 	}
 	zipcli.Compress.Loop = 0x20
 	zipcli.Compress.ZipFile.FileName = "defaultzip.file"
+	zipcli.Compress.ZipFolder.CreationTime = time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
 
 	//create a filler with the application name and its description.
 	filler := myflags.NewFiller("cptool", "a zip command",
