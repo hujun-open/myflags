@@ -56,6 +56,7 @@ type Filler struct {
 	includeSummaryHelp bool
 	nounVals           map[uint]reflect.Value //the noun field values
 	nounFields         map[uint]reflect.StructField
+	nounCompleters     map[uint]cobra.CompletionFunc
 }
 
 // FillerOption is an option when creating new Filler
@@ -68,6 +69,12 @@ func WithRenamer(r RenameFunc) FillerOption {
 	}
 }
 
+func WithShellCompletionCMD() FillerOption {
+	return func(filler *Filler) {
+		filler.CompletionOptions.DisableDefaultCmd = false
+	}
+}
+
 // WithFlagErrHandling returns a FillerOption thats specifies the flag.ErrorHandling
 func WithFlagErrHandling(h flag.ErrorHandling) FillerOption {
 	return func(filler *Filler) {
@@ -75,11 +82,17 @@ func WithFlagErrHandling(h flag.ErrorHandling) FillerOption {
 	}
 }
 
-// WithRootMethod set f as the Run method for the root command,
-// if f is nil, then use filler.Root
+// WithRootMethod set f as the Run method of the root command
 func WithRootMethod(f RunMethod) FillerOption {
 	return func(filler *Filler) {
 		filler.Command.Root().Run = f
+	}
+}
+
+// WithRootArgCompletionMethod set f as ValidArgsFunction of the root command
+func WithRootArgCompletionMethod(f cobra.CompletionFunc) FillerOption {
+	return func(filler *Filler) {
+		filler.Command.Root().ValidArgsFunction = f
 	}
 }
 
@@ -95,9 +108,11 @@ func NewFiller(name, usage string, options ...FillerOption) *Filler {
 			Use:   name,
 			Short: usage,
 		},
-		nounVals:   make(map[uint]reflect.Value),
-		nounFields: make(map[uint]reflect.StructField),
+		nounVals:       make(map[uint]reflect.Value),
+		nounFields:     make(map[uint]reflect.StructField),
+		nounCompleters: make(map[uint]cobra.CompletionFunc),
 	}
+	r.Command.CompletionOptions.DisableDefaultCmd = true
 	for _, o := range options {
 		o(r)
 	}
@@ -112,6 +127,7 @@ func NewFiller(name, usage string, options ...FillerOption) *Filler {
 func newInheritFiller(father *Filler, fsname, ousage string, method RunMethod) *Filler {
 	r := NewFiller(fsname, ousage, father.optList...)
 	r.Run = method
+	r.ValidArgsFunction = r.getActNounCompleter()
 	father.AddCommand(r.Command)
 	return r
 }
@@ -136,6 +152,8 @@ const (
 	ValidValuesTag = "choices"
 	//NounTag marks a field as noun for a command, there is only one field will be treated as noun per (sub-)struct
 	NounTag = "noun"
+	//CompleteTag specify a method as cobra.CompleteFunc
+	CompleteTag = "complete"
 )
 
 // RunMethod is the type of function could be used as cobra.Command.Run
@@ -439,6 +457,7 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix string, isAct boo
 	}
 	ElemK := inV.Elem().Kind()
 	validFlagValsMap := make(map[string]string)
+	flagCompleteMethodMap := make(map[string]cobra.CompletionFunc)
 	// flagCompleteFuncMap:=make(map[string]cobra.com)
 	defer func() {
 		if isAct {
@@ -475,6 +494,13 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix string, isAct boo
 				}
 
 			}
+			for flagname, m := range flagCompleteMethodMap {
+				derr := filler.Command.RegisterFlagCompletionFunc(flagname, m)
+				if derr != nil {
+					ferr = fmt.Errorf("failed to register complete function for flag %v, %w", flagname, err)
+					return
+				}
+			}
 		}
 	}()
 
@@ -496,6 +522,7 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix string, isAct boo
 			// fmt.Println("walk into ", inT.Elem().Field(i).Name, inT.Elem().Field(i).Type)
 			field := inV.Elem().Field(i)
 			fieldT := inT.Elem().Field(i)
+			isNoun := false
 			if fieldT.IsExported() {
 				//only handle exported field
 
@@ -507,9 +534,28 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix string, isAct boo
 				if _, exists := fieldT.Tag.Lookup(SkipTag); exists {
 					continue
 				}
+				//check complete method
+				var completeMethod cobra.CompletionFunc
+				if flagCompleteName, exists := fieldT.Tag.Lookup(CompleteTag); exists {
+					if _, exists := fieldT.Tag.Lookup(ValidValuesTag); exists {
+						return fmt.Errorf("%v tag and %v tag can't be set at the same time", CompleteTag, ValidValuesTag)
+					}
+					flagCompleteName = strings.TrimSpace(flagCompleteName)
+					if flagCompleteName != "" {
+						methodVal := getMethod(root, field, flagCompleteName)
+						if !methodVal.IsValid() {
+							return fmt.Errorf("action %v's method %v not found", fieldT.Name, flagCompleteName)
+						}
+						completeMethod = methodVal.Interface().(cobra.CompletionFunc)
+
+					}
+				}
+				validFlagVals, _ := fieldT.Tag.Lookup(ValidValuesTag)
 				//check if it is noun field
+				var nounID uint64 = 1
 				if ids, exists := fieldT.Tag.Lookup(NounTag); exists {
-					var nounID uint64 = 1
+					isNoun = true
+
 					if strings.TrimSpace(ids) != "" {
 						nounID, ferr = strconv.ParseUint(ids, 10, 64)
 
@@ -531,8 +577,17 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix string, isAct boo
 					filler.Command.PreRunE = func(cmd *cobra.Command, args []string) error {
 						return filler.parseNoun(args)
 					}
+					if completeMethod == nil {
+						//if there is no CompleteTag, check for ValidValuesTag value
+						if strings.TrimSpace(validFlagVals) != "" {
+							helper := newValidFlagValues(validFlagVals)
+							completeMethod = helper.complete
+						}
+					}
+					filler.nounCompleters[uint(nounID)] = completeMethod
 					continue
 				}
+
 				usage, _ := fieldT.Tag.Lookup(UsageTag)
 				fname := fieldT.Name
 				if filler.renamer != nil {
@@ -551,7 +606,6 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix string, isAct boo
 				if _, ok := fieldT.Tag.Lookup(RequiredTag); ok {
 					requiredFlags = append(requiredFlags, fname)
 				}
-				validFlagVals, _ := fieldT.Tag.Lookup(ValidValuesTag)
 
 				if field.Kind() == reflect.Pointer {
 					if field.IsNil() {
@@ -559,6 +613,7 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix string, isAct boo
 						field.Set(reflect.New(fieldT.Type.Elem()))
 					}
 				}
+
 				//check if the field is an action struct
 				if fieldT.Type.Kind() == reflect.Struct ||
 					(fieldT.Type.Kind() == reflect.Pointer && fieldT.Type.Elem().Kind() == reflect.Struct) {
@@ -595,6 +650,11 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix string, isAct boo
 					}
 					if validFlagVals != "" {
 						validFlagValsMap[fname] = validFlagVals
+					}
+					if completeMethod != nil {
+						if !isNoun {
+							flagCompleteMethodMap[fname] = completeMethod
+						}
 					}
 					return nil
 

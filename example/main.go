@@ -13,12 +13,11 @@ import (
 
 type ZipCLI struct {
 	ConfigFile     string       `short:"c" usage:"working profile"`
-	SvrAddr        net.IP       `usage:"server address to download the archive"`
+	SvrAddr        net.IP       `usage:"server address to download the archive" complete:"SvrComplete"` //using completer method SvrComplete for shell completion
 	BackupAddrList []netip.Addr `usage:"backup server address list"`
-	Arg1           string       `noun:"1" usage:"arg for root command"` //positional argument for root command
 	Compress       struct {
 		Loop      uint   `base:"16" short:"l" usage:"number of compress iterations"`
-		Profile   string `usage:"compress profile" choices:"p1,p2,p3"`
+		Profile   string `usage:"compress profile" choices:"p1,p2,p3"` //using choices for shell compeltion
 		Skip      bool
 		NoFlag    string   `skipflag:""` //ignore this field for flagging
 		DryRun    struct{} `alias:"dry" usage:"dry run, doesn't actually create any file" action:"Dry"`
@@ -33,9 +32,9 @@ type ZipCLI struct {
 		} `usage:"zip a file" action:"ZipFile"`
 	} `usage:"to compress things" action:"Comp"`
 	Extract struct {
-		InputFile    string `noun:"1" usage:"input archive file"`
+		InputFile    string `noun:"1" usage:"input archive file" complete:"ExtractInputComplete"`
 		OutputFolder string `noun:"2" usage:"output folder"`
-	} `usage:"to unzip things" action:""`
+	} `usage:"to unzip things" action:"Extr"`
 }
 
 func (zipcli *ZipCLI) Dry(cmd *cobra.Command, args []string) {
@@ -60,6 +59,16 @@ func (zipcli *ZipCLI) RootCMD(cmd *cobra.Command, args []string) {
 	fmt.Printf("root %+v\n", zipcli)
 }
 
+func (zipcli *ZipCLI) SvrComplete(cmd *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
+	return []cobra.Completion{"1.1.1.1", "2.2.2.2", "3.3.3.3"}, cobra.ShellCompDirectiveKeepOrder
+
+}
+
+func (zipcli *ZipCLI) ExtractInputComplete(cmd *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
+	return []cobra.Completion{"ab", "cd", "ef"}, cobra.ShellCompDirectiveKeepOrder
+
+}
+
 func main() {
 	//some default values
 	zipcli := ZipCLI{
@@ -71,6 +80,7 @@ func main() {
 
 	//create a filler with the application name and its description.
 	filler := myflags.NewFiller("cptool", "a zip command",
+		myflags.WithShellCompletionCMD(),
 		myflags.WithDocGenCMD(),
 		myflags.WithSummaryHelp(),
 		myflags.WithRootMethod(zipcli.RootCMD),

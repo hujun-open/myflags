@@ -370,6 +370,33 @@ func TestMyflags(t *testing.T) {
 			expectedActs: []string{},
 			shouldFail:   false,
 		},
+		{ //case 22, 2nd noun default
+			input: TestStruct{
+				Arg2: time.Date(2002, 3, 4, 11, 22, 33, 0, time.UTC),
+			},
+			errh: flag.PanicOnError,
+			Args: []string{"disk"},
+			expectedResult: TestStruct{
+				Arg1: "disk",
+				Arg2: time.Date(2002, 3, 4, 11, 22, 33, 0, time.UTC),
+			},
+			expectedActs: []string{},
+			shouldFail:   false,
+		},
+		{ //case 23, noun all default
+			input: TestStruct{
+				Arg1: "defArg1",
+				Arg2: time.Date(2002, 3, 4, 11, 22, 33, 0, time.UTC),
+			},
+			errh: flag.PanicOnError,
+			Args: []string{},
+			expectedResult: TestStruct{
+				Arg1: "defArg1",
+				Arg2: time.Date(2002, 3, 4, 11, 22, 33, 0, time.UTC),
+			},
+			expectedActs: []string{},
+			shouldFail:   false,
+		},
 	}
 
 	for i, c := range caseList {

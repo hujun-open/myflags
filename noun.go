@@ -13,10 +13,8 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+// parseNoun is set as command's PreRunE method so that it could parse args for the nouns
 func (filler *Filler) parseNoun(args []string) error {
-	if len(args) == 0 {
-		args = []string{""}
-	}
 	var inV reflect.Value
 	var ok bool
 	var index uint
@@ -83,6 +81,18 @@ func (filler *Filler) parseNoun(args []string) error {
 		}
 	}
 	return nil
+}
+
+// getActNounCompleter return a completer that completes one or multiple nouns
+func (filler *Filler) getActNounCompleter() cobra.CompletionFunc {
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
+		filler.parseNoun(args) //no need to check return error since this is just for completion
+		index := len(args) + 1
+		if cf, ok := filler.nounCompleters[uint(index)]; ok {
+			return cf(cmd, args, toComplete)
+		}
+		return nil, cobra.ShellCompDirectiveDefault
+	}
 }
 
 // SetPreRun set f as filler.Commmand.PreRun method;

@@ -30,9 +30,7 @@ https://github.com/hujun-open/myflags/blob/a06b78dbf363c27240d07e59919d9eaf3b03d
 the created flags:
 ```
 .\cptool summaryhelp
-  = cptool <Arg1> [flags]
-    <Arg1>: arg for root command
-      default:""
+  = cptool [flags]
     --backupaddrlist: backup server address list
     -c, --configfile: working profile
         default:default.conf
@@ -108,7 +106,8 @@ Following struct field tags are supported:
 - usage: the usage string of the parameter
 - action: this field is an action, the value is the method name to run
 - required: this field is a mandatory required flag
-- choices: a comma separated list of value choices for the field, used for auto completion
+- choices: a comma separated list of value choices for the field, used for shell completion
+- complete: the value is the method name for shell completion
 
 
 ## Supported Types
@@ -173,6 +172,16 @@ Optionally a renaming function could be supplied when creating the `Filler`, myf
 
 ## Positional Argument
 Positional arguments are the struct field with "noun" tag, the value of the tag is the postional index, start from 1. positional argument only get parsed with a command, which means in case of root command positional argument only get parsed when filler is created with `WithRootMethod`.
+
+## Shell Completion
+A shell completion script generation command `completion` could be included via `WithShellCompletionCMD()`. which is the default [cobra shell completion](https://github.com/spf13/cobra/blob/main/site/content/completions/_index.md) command.
+
+there are two options on how to complete a flag or postional argument
+
+- use `choice` tag to specify a list of comma sperated values
+- use `complete` tag to specify a completion metho with type of [`cobra.CompletionFunc`](https://pkg.go.dev/github.com/spf13/cobra#CompletionFunc)
+
+both tags can't be used at the same time for a given flag or argument.
 
 ## Extension
 New type could be supported via `myflags.Register`, which takes a variable implements `myflags.RegisteredConverters` interface. the `myflags.Register` must be called before `myflags.Fill`, typically it should be called in `init()`.
