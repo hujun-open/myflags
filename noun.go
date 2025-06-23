@@ -235,3 +235,23 @@ func rpad(s string, padding int) string {
 func trimRightSpace(s string) string {
 	return strings.TrimRightFunc(s, unicode.IsSpace)
 }
+
+// GetNounCompleteFunc returns complete function for the noun specified by the index, which start from 1;
+// return nil if not found
+func (filler *Filler) GetNounCompleteFunc(index uint) cobra.CompletionFunc {
+	if filler.nounCompleters != nil {
+		if f, ok := filler.nounCompleters[index]; ok {
+			return f
+		}
+	}
+	return nil
+}
+
+// GetNounStructField returns struct field for the noun specified by the index, which start from 1;
+// return nil if not found
+func (filler *Filler) GetNounStructField(index uint) *reflect.StructField {
+	if f, ok := filler.nounFields[index]; ok {
+		return &f
+	}
+	return nil
+}

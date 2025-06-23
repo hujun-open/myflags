@@ -806,6 +806,42 @@ func IsOwnAction(cmd *cobra.Command, completionCMDName, helpCMDName string, skip
 
 }
 
+// FindFiller return corresponding filler that handles given args
+func (filler *Filler) FindFiller(args []string) *Filler {
+	cmd, _, _ := filler.Find(args)
+
+	path := "/" + strings.Join(strings.Fields(cmd.CommandPath())[1:], "/")
+
+	return filler.GetChildFiller(path)
+}
+
+// GetChildFiller return a child Filler specified by child path,
+// which is a string of list of command names separated by "/", start with "/" which represents calling filler's command
+// e.g. /act1/act12/act121; return nil if not found or childpath is not valid
+func (filler *Filler) GetChildFiller(childpath string) *Filler {
+	if childpath[0] != '/' {
+		return nil
+	}
+	if childpath == "/" {
+		return filler
+	}
+	curCMD := filler
+	for _, p := range strings.FieldsFunc(childpath, func(c rune) bool { return c == '/' }) {
+		found := false
+		for _, child := range curCMD.fsMap {
+			if child.Command.Name() == p {
+				found = true
+				curCMD = child
+				break
+			}
+		}
+		if !found {
+			return nil
+		}
+	}
+	return curCMD
+}
+
 // GetChildCommand return a child command specified by child path,
 // which is a string of list of command names separated by "/", start with "/" which represents calling filler's command
 // e.g. /act1/act12/act121; return nil if not found or childpath is not valid
