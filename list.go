@@ -116,11 +116,12 @@ func getListType(ref reflect.Value, tag reflect.StructTag) (*listType, error) {
 	return &newval, nil
 }
 
-func processList(fs *flag.FlagSet, ref reflect.Value, tag reflect.StructTag, name, usage string) error {
+func processList(fs *flag.FlagSet, ref reflect.Value, tag reflect.StructTag, name, short, usage string) error {
 	newlist, err := getListType(ref, tag)
 	if err != nil {
 		return err
 	}
-	fs.Var(newlist, name, usage)
+	fs.VarP(newlist, name, short, usage)
+
 	return nil
 }

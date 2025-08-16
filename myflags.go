@@ -734,7 +734,7 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix string, isAct boo
 						}
 					}
 					if process {
-						err = processList(fs, field.Addr(), fieldT.Tag, fname, usage)
+						err = processList(fs, field.Addr(), fieldT.Tag, fname, fshort, usage)
 						if err != nil {
 							return err
 						}

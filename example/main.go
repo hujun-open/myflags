@@ -14,7 +14,7 @@ import (
 type ZipCLI struct {
 	ConfigFile     string       `short:"c" usage:"working profile"`
 	SvrAddr        net.IP       `usage:"server address to download the archive" complete:"SvrComplete"` //using completer method SvrComplete for shell completion
-	BackupAddrList []netip.Addr `usage:"backup server address list"`
+	BackupAddrList []netip.Addr `short:"b" usage:"backup server address list"`
 	Compress       struct {
 		Loop      uint   `base:"16" short:"l" usage:"number of compress iterations"`
 		Profile   string `usage:"compress profile" choices:"p1,p2,p3"` //using choices for shell compeltion
