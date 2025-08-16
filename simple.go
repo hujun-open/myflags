@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"strings"
 
-	flag "github.com/hujun-open/pflag"
+	flag "github.com/spf13/pflag"
 )
 
 func getTypeName(t reflect.Type) string {

@@ -8,7 +8,7 @@ import (
 	"reflect"
 	"strings"
 
-	flag "github.com/hujun-open/pflag"
+	flag "github.com/spf13/pflag"
 )
 
 // this is to support slice and array
@@ -36,6 +36,7 @@ func (list *listType) String() string {
 			}
 		} else {
 			elemVal = list.val.Elem().Index(i).Addr().Interface()
+
 		}
 		r += list.conv.ToStr(elemVal, list.tags) + ","
 

@@ -11,7 +11,7 @@ import (
 	"reflect"
 	"strings"
 
-	flag "github.com/hujun-open/pflag"
+	flag "github.com/spf13/pflag"
 	"golang.org/x/exp/slices"
 
 	"github.com/hujun-open/cobra"

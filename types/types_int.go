@@ -34,6 +34,11 @@ type intType struct {
 }
 
 func (i *intType) ToStr(in any, tag reflect.StructTag) string {
+	//if in is a pointer, convert it to the value
+	val := reflect.ValueOf(in)
+	if val.Kind() == reflect.Pointer {
+		val = val.Elem()
+	}
 	base, _ := tag.Lookup("base")
 	fmtstr := "%d"
 	switch strings.TrimSpace(base) {
@@ -44,7 +49,7 @@ func (i *intType) ToStr(in any, tag reflect.StructTag) string {
 	case "16":
 		fmtstr = "0x%x"
 	}
-	return fmt.Sprintf(fmtstr, in)
+	return fmt.Sprintf(fmtstr, val.Interface())
 }
 
 func (i *intType) FromStr(s string, tag reflect.StructTag) (any, error) {

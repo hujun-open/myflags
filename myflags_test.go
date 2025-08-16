@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/hujun-open/cobra"
-	flag "github.com/hujun-open/pflag"
+	flag "github.com/spf13/pflag"
 
 	"github.com/hujun-open/myflags/v2"
 	_ "github.com/hujun-open/myflags/v2/types"

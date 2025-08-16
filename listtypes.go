@@ -17,7 +17,11 @@ func init() {
 type strType string
 
 func (s *strType) ToStr(in any, tag reflect.StructTag) string {
+	if reflect.ValueOf(in).Kind() == reflect.Pointer {
+		return *(in.(*string))
+	}
 	return in.(string)
+
 }
 
 func (s *strType) FromStr(input string, tag reflect.StructTag) (any, error) {
@@ -27,6 +31,9 @@ func (s *strType) FromStr(input string, tag reflect.StructTag) (any, error) {
 type boolType bool
 
 func (b *boolType) ToStr(in any, tag reflect.StructTag) string {
+	if reflect.ValueOf(in).Kind() == reflect.Pointer {
+		return fmt.Sprint(*(in.(*bool)))
+	}
 	return fmt.Sprint(in)
 }
 func (b *boolType) FromStr(input string, tag reflect.StructTag) (any, error) {
@@ -38,7 +45,12 @@ type floatType struct {
 }
 
 func (f *floatType) ToStr(in any, tag reflect.StructTag) string {
-	return fmt.Sprint(in)
+	//if in is a pointer, convert it to the value
+	val := reflect.ValueOf(in)
+	if val.Kind() == reflect.Pointer {
+		val = val.Elem()
+	}
+	return fmt.Sprint(val.Interface())
 }
 func (f *floatType) FromStr(s string, tag reflect.StructTag) (any, error) {
 	f64, err := strconv.ParseFloat(s, f.len)
