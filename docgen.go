@@ -5,8 +5,8 @@ import (
 	"log"
 	"strconv"
 
-	"github.com/hujun-open/cobra"
-	"github.com/hujun-open/cobra/doc"
+	"github.com/spf13/cobra"
+	"github.com/spf13/cobra/doc"
 )
 
 type genDoc struct {

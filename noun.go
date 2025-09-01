@@ -9,7 +9,7 @@ import (
 	"text/tabwriter"
 	"unicode"
 
-	"github.com/hujun-open/cobra"
+	"github.com/spf13/cobra"
 	"golang.org/x/exp/slices"
 )
 

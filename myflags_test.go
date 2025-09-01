@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hujun-open/cobra"
+	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 
 	"github.com/hujun-open/myflags/v2"

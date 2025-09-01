@@ -6,16 +6,16 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/hujun-open/cobra"
 	"github.com/hujun-open/myflags/v2"
 	_ "github.com/hujun-open/myflags/v2/types"
+	"github.com/spf13/cobra"
 )
 
 type ZipCLI struct {
 	ConfigFile     string       `short:"c" usage:"working profile"`
 	SvrAddr        net.IP       `usage:"server address to download the archive" complete:"SvrComplete"` //using completer method SvrComplete for shell completion
 	BackupAddrList []netip.Addr `short:"b" usage:"backup server address list"`
-	IntList        []float32    `short:"i" usage:"list of numbers"`
+	FloatList      []float32    `short:"f" usage:"list of numbers"`
 	StrList        []string     `usage:"list of string"`
 	Compress       struct {
 		Loop      uint   `base:"16" short:"l" usage:"number of compress iterations"`
@@ -79,7 +79,7 @@ func main() {
 	}
 	zipcli.BackupAddrList = []netip.Addr{netip.MustParseAddr("1.1.1.1"), netip.MustParseAddr("2.2.2.2")}
 	zipcli.Compress.Loop = 0x20
-	zipcli.IntList = []float32{1.7, 2.2, 3.3}
+	zipcli.FloatList = []float32{1.7, 2.2, 3.3}
 	zipcli.Compress.ZipFile.FileName = "defaultzip.file"
 	zipcli.Compress.ZipFolder.CreationTime = time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
 

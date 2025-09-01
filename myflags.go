@@ -14,7 +14,7 @@ import (
 	flag "github.com/spf13/pflag"
 	"golang.org/x/exp/slices"
 
-	"github.com/hujun-open/cobra"
+	"github.com/spf13/cobra"
 )
 
 // encodingTextMarshaler is the interface includes both encoding.TextMarshaler and encoding.TextUnmarshaler

@@ -31,9 +31,14 @@ the created flags:
 ```
 .\cptool summaryhelp
   = cptool [flags]
-    --backupaddrlist: backup server address list
+    -b, --backupaddrlist: backup server address list
+        default:1.1.1.1,2.2.2.2
     -c, --configfile: working profile
         default:default.conf
+    -f, --floatlist: list of numbers
+        default:1.7,2.2,3.3
+    --strlist: list of string
+        default:a,bb,ccc
     --svraddr: server address to download the archive
         default:<nil>
     = cptool compress
@@ -87,12 +92,12 @@ the created flags:
         default:false
 ```
 some parsing results:
-```
-.\cptool --svraddr 1.1.1.1 --backupaddrlist 2.2.2.2,2001:dead::1 compress -l 3  zipfile  input1 out.zip         
-zipfile &{ConfigFile:default.conf SvrAddr:1.1.1.1 BackupAddrList:[2.2.2.2 2001:dead::1] Arg1: Compress:{Loop:3 Profile: Skip:false NoFlag: DryRun:{} ZipFolder:{FolderName: ArchiveName: CreationTime:2025-01-02 03:04:05 +0000 UTC} ZipFile:{FileName:input1 ArchiveName:out.zip}} Extract:{InputFile: OutputFolder:}}
+```        
+./cptool --svraddr 1.1.1.1 --backupaddrlist 2.2.2.2,2001:dead::1 compress -l 3  zipfile  input1 out.zip
+zipfile &{ConfigFile:default.conf SvrAddr:1.1.1.1 BackupAddrList:[2.2.2.2 2001:dead::1] FloatList:[1.7 2.2 3.3] StrList:[a bb ccc] Compress:{Loop:3 Profile: Skip:false NoFlag: DryRun:{} ZipFolder:{FolderName: ArchiveName: CreationTime:2025-01-02 03:04:05 +0000 UTC} ZipFile:{FileName:input1 ArchiveName:out.zip}} Extract:{InputFile: OutputFolder:}}
 
 .\cptool compress zipfolder folder1 out.zip "2030 01 Jun 13:01" -l 99
-zipfolder &{ConfigFile:default.conf SvrAddr:<nil> BackupAddrList:[] Arg1: Compress:{Loop:99 Profile: Skip:false NoFlag: DryRun:{} ZipFolder:{FolderName:folder1 ArchiveName:out.zip CreationTime:2030-06-01 13:01:00 +0000 UTC} ZipFile:{FileName:defaultzip.file ArchiveName:}} Extract:{InputFile: OutputFolder:}}
+zipfolder &{ConfigFile:default.conf SvrAddr:<nil> BackupAddrList:[1.1.1.1 2.2.2.2] FloatList:[1.7 2.2 3.3] StrList:[a bb ccc] Compress:{Loop:99 Profile: Skip:false NoFlag: DryRun:{} ZipFolder:{FolderName:folder1 ArchiveName:out.zip CreationTime:2030-06-01 13:01:00 +0000 UTC} ZipFile:{FileName:defaultzip.file ArchiveName:}} Extract:{InputFile: OutputFolder:}}
 ```
 
 
@@ -117,7 +122,7 @@ Base:
 - string
 - bool
 
-provided by `github.com/hujun-open/myflags/v2/types`:
+following are provided by `github.com/hujun-open/myflags/v2/types`:
 
 - all int/uint types: support `base` tag for the base
 - net.HardwareAddr
@@ -125,16 +130,16 @@ provided by `github.com/hujun-open/myflags/v2/types`:
 - net.IP
 - time.Time
 - time.Duration
-- all int/uint types
 
 Others:
 - All types implement both of following interface:
-    - `encoding.TextUnmarshaler`
+    - `encoding.TextMarshaler`
     - `encoding.TextUnmarshaler`
 - All type register via `myflags.Register` function
 
 Note: flag is only created for exported struct field.
 
+### Slice / Array
 
 In addition to above types, following types are also supported:
 
@@ -142,7 +147,11 @@ In addition to above types, following types are also supported:
 - slice/array of type above
 - slice/array of pointer to the type above
 
-for slice/array, use "," as separator. 
+Use "," as separator of items in the input string
+
+note: if the item type is struct, then it must be either registered type or implements `encoding.TextMarshaler`/`encoding.TextUnmarshaler`
+
+### Nested / Embeded struct
 
 myflags also supports following type of struct:
 

@@ -3,7 +3,7 @@ package myflags
 import (
 	"strings"
 
-	"github.com/hujun-open/cobra"
+	"github.com/spf13/cobra"
 )
 
 // validFlagValues is a helper struct used to support ValidValuesTag
