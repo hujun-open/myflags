@@ -192,6 +192,8 @@ there are two options on how to complete a flag or postional argument
 
 both tags can't be used at the same time for a given flag or argument.
 
+[github.com/hujun-open/completers](https://github.com/hujun-open/completers) contains a collection of completion methods that could be used by myflags.
+
 ## Extension
 New type could be supported via `myflags.Register`, which takes a variable implements `myflags.RegisteredConverters` interface. the `myflags.Register` must be called before `myflags.Fill`, typically it should be called in `init()`.
 
