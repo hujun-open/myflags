@@ -167,6 +167,12 @@ func (filler *Filler) addNewAct(act, usage string, method RunMethod) {
 	filler.fsMap[act] = newInheritFiller(filler, act, usage, method)
 }
 
+func (filler *Filler) addNewActE(act, usage string, method func(*cobra.Command, []string) error) {
+	child := newInheritFiller(filler, act, usage, nil)
+	child.RunE = method
+	filler.fsMap[act] = child
+}
+
 const summaryStep = "  "
 
 // SummaryFillerUsageStr returns a usage string that include usage of flags, child commands and their children
@@ -231,10 +237,11 @@ func (filler *Filler) SummaryHelpCMD() *cobra.Command {
 		Use:   SummaryHelpCMDName,
 		Short: "help in summary",
 		Run: func(c *cobra.Command, args []string) {
-			fmt.Print(SummaryFillerUsageStr(filler, ""))
+			out := c.OutOrStdout()
+			fmt.Fprint(out, SummaryFillerUsageStr(filler, ""))
 			for _, cmd := range filler.Commands() {
 				if _, ok := filler.fsMap[cmd.Name()]; !ok {
-					fmt.Print(SummaryUsageStr(cmd, summaryStep))
+					fmt.Fprint(out, SummaryUsageStr(cmd, summaryStep))
 				}
 			}
 
@@ -254,13 +261,17 @@ func WithSummaryHelp() FillerOption {
 func (filler *Filler) Fill(in any) error {
 	t := reflect.TypeOf(in)
 	if t.Kind() == reflect.Ptr && t.Elem().Kind() == reflect.Struct {
-		err := filler.walk(reflect.ValueOf(in), reflect.ValueOf(in), "", true)
+		err := filler.walk(reflect.ValueOf(in), reflect.ValueOf(in), "", true, nil)
 		if err != nil {
 
 			return err
 		}
 		if filler.includeDocGenCMD {
-			filler.AddCommand(docFiller.Command)
+			docCmd, err := newDocFiller()
+			if err != nil {
+				return err
+			}
+			filler.AddCommand(docCmd.Command)
 		}
 		if filler.includeSummaryHelp {
 			filler.AddCommand(filler.SummaryHelpCMD())
@@ -412,20 +423,31 @@ func isFlagSupportedKind(k reflect.Kind) bool {
 }
 
 // getMethod return method value specified by the name if current has it, if not, then return root's method with the same name
-func getMethod(root, current reflect.Value, name string) reflect.Value {
+func getMethod(root, current reflect.Value, name string, findingCompleteMethod bool) (reflect.Value, error) {
+	expectedType := reflect.TypeOf((*cobra.CompletionFunc)(nil)).Elem()
 	cur := current
 	if cur.Kind() != reflect.Pointer {
 		cur = current.Addr()
 	}
 	methodVal := cur.MethodByName(name)
 	if methodVal.IsValid() {
-		return methodVal
+		if findingCompleteMethod && methodVal.Type() != expectedType {
+			return reflect.Value{}, fmt.Errorf("%v is not a cobra complete function", name)
+		}
+		return methodVal, nil
 	}
 	r := root
 	if r.Kind() != reflect.Pointer {
 		r = root.Addr()
 	}
-	return r.MethodByName(name)
+	methodVal = r.MethodByName(name)
+	if methodVal.IsValid() {
+		if findingCompleteMethod && methodVal.Type() != expectedType {
+			return reflect.Value{}, fmt.Errorf("%v is not a cobra complete function", name)
+		}
+		return methodVal, nil
+	}
+	return reflect.Value{}, fmt.Errorf("%v is not a valid function", name)
 
 }
 
@@ -437,15 +459,28 @@ func isSupportedKind(inK reflect.Kind) bool {
 	return true
 }
 
+// walkMeta collects required flags and completions for one command.
+// Nested non-action structs share the command's meta; each action gets its own.
+type walkMeta struct {
+	required   []string
+	choices    map[string]string
+	completers map[string]cobra.CompletionFunc
+}
+
 // in must be a pointer to struct
 // NOTE: there are following methods to register a flag
 // - setStandardFlagType
 // - setTextEncodingType
 // - simpleType.process
-func (filler *Filler) walk(root, inV reflect.Value, nameprefix string, isAct bool) (ferr error) {
+func (filler *Filler) walk(root, inV reflect.Value, nameprefix string, isAct bool, meta *walkMeta) (ferr error) {
 	fs := filler.fs
-	requiredFlags := []string{}
 	var err error
+	if isAct {
+		meta = &walkMeta{
+			choices:    map[string]string{},
+			completers: map[string]cobra.CompletionFunc{},
+		}
+	}
 	if inV.Kind() != reflect.Pointer {
 		inV = inV.Addr()
 	}
@@ -456,8 +491,6 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix string, isAct boo
 
 	}
 	ElemK := inV.Elem().Kind()
-	validFlagValsMap := make(map[string]string)
-	flagCompleteMethodMap := make(map[string]cobra.CompletionFunc)
 	// flagCompleteFuncMap:=make(map[string]cobra.com)
 	defer func() {
 		if isAct {
@@ -478,14 +511,14 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix string, isAct boo
 			}
 
 			filler.PersistentFlags().AddFlagSet(fs)
-			for _, f := range requiredFlags {
+			for _, f := range meta.required {
 				derr := cobra.MarkFlagRequired(fs, f)
 				if derr != nil {
 					ferr = fmt.Errorf("failed to mark flag %v required, %w", f, derr)
 					return
 				}
 			}
-			for flagname, valstr := range validFlagValsMap {
+			for flagname, valstr := range meta.choices {
 				helper := newValidFlagValues(valstr)
 				derr := filler.Command.RegisterFlagCompletionFunc(flagname, helper.complete)
 				if derr != nil {
@@ -494,7 +527,7 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix string, isAct boo
 				}
 
 			}
-			for flagname, m := range flagCompleteMethodMap {
+			for flagname, m := range meta.completers {
 				derr := filler.Command.RegisterFlagCompletionFunc(flagname, m)
 				if derr != nil {
 					ferr = fmt.Errorf("failed to register complete function for flag %v, %w", flagname, err)
@@ -542,9 +575,9 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix string, isAct boo
 					}
 					flagCompleteName = strings.TrimSpace(flagCompleteName)
 					if flagCompleteName != "" {
-						methodVal := getMethod(root, field, flagCompleteName)
-						if !methodVal.IsValid() {
-							return fmt.Errorf("action %v's method %v not found", fieldT.Name, flagCompleteName)
+						methodVal, err := getMethod(root, field, flagCompleteName, true)
+						if err != nil {
+							return fmt.Errorf("action %v's complete method is not valid, %w", fieldT.Name, err)
 						}
 						completeMethod = methodVal.Interface().(cobra.CompletionFunc)
 
@@ -604,7 +637,7 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix string, isAct boo
 					}
 				}
 				if _, ok := fieldT.Tag.Lookup(RequiredTag); ok {
-					requiredFlags = append(requiredFlags, fname)
+					meta.required = append(meta.required, fname)
 				}
 
 				if field.Kind() == reflect.Pointer {
@@ -622,17 +655,29 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix string, isAct boo
 							return fmt.Errorf("found struct type field with duplicate name %v", fname)
 						}
 						var m RunMethod = DefRunMethod
+						var mE func(*cobra.Command, []string) error
 						methodName = strings.TrimSpace(methodName)
 						if methodName != "" {
-							methodVal := getMethod(root, field, methodName)
-							if !methodVal.IsValid() {
-								return fmt.Errorf("action %v's method %v not found", fieldT.Name, methodName)
+							methodVal, err := getMethod(root, field, methodName, false)
+							if err != nil {
+								return fmt.Errorf("action %v's method %v is not valid, %w", fieldT.Name, methodName, err)
 							}
-							m = methodVal.Interface().(func(*cobra.Command, []string))
+							switch fn := methodVal.Interface().(type) {
+							case func(*cobra.Command, []string):
+								m = fn
+							case func(*cobra.Command, []string) error:
+								mE = fn
+							default:
+								return fmt.Errorf("action %v's method %v has type %T, want func(*cobra.Command, []string) or func(*cobra.Command, []string) error", fieldT.Name, methodName, methodVal.Interface())
+							}
 						}
 
-						filler.addNewAct(fname, usage, m)
-						err = filler.fsMap[fname].walk(root, field, fname, true)
+						if mE != nil {
+							filler.addNewActE(fname, usage, mE)
+						} else {
+							filler.addNewAct(fname, usage, m)
+						}
+						err = filler.fsMap[fname].walk(root, field, fname, true, nil)
 
 						if err != nil {
 							return err
@@ -646,14 +691,17 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix string, isAct boo
 				//flagFunc gets called for each valid flag
 				flagFunc := func(islist bool) error {
 					if islist {
+						if fieldT.Type.Kind() == reflect.Slice && strings.TrimSpace(validFlagVals) != "" {
+							return fmt.Errorf("%s tag is not supported for slice field %s", ValidValuesTag, fieldT.Name)
+						}
 						return nil
 					}
 					if validFlagVals != "" {
-						validFlagValsMap[fname] = validFlagVals
+						meta.choices[fname] = validFlagVals
 					}
 					if completeMethod != nil {
 						if !isNoun {
-							flagCompleteMethodMap[fname] = completeMethod
+							meta.completers[fname] = completeMethod
 						}
 					}
 					return nil
@@ -750,7 +798,7 @@ func (filler *Filler) walk(root, inV reflect.Value, nameprefix string, isAct boo
 				}
 
 				//non-act struct or
-				err = filler.walk(root, field, fname, false)
+				err = filler.walk(root, field, fname, false, meta)
 				if err != nil {
 					return err
 				}
@@ -819,7 +867,7 @@ func (filler *Filler) FindFiller(args []string) *Filler {
 // which is a string of list of command names separated by "/", start with "/" which represents calling filler's command
 // e.g. /act1/act12/act121; return nil if not found or childpath is not valid
 func (filler *Filler) GetChildFiller(childpath string) *Filler {
-	if childpath[0] != '/' {
+	if childpath == "" || childpath[0] != '/' {
 		return nil
 	}
 	if childpath == "/" {
@@ -846,7 +894,7 @@ func (filler *Filler) GetChildFiller(childpath string) *Filler {
 // which is a string of list of command names separated by "/", start with "/" which represents calling filler's command
 // e.g. /act1/act12/act121; return nil if not found or childpath is not valid
 func (filler *Filler) GetChildCommand(childpath string) *cobra.Command {
-	if childpath[0] != '/' {
+	if childpath == "" || childpath[0] != '/' {
 		return nil
 	}
 	curCMD := filler.Command

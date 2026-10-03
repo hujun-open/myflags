@@ -3,7 +3,6 @@ package myflags
 import (
 	"encoding"
 	"fmt"
-	"os"
 	"reflect"
 	"strings"
 	"text/tabwriter"
@@ -23,6 +22,9 @@ func (filler *Filler) parseNoun(args []string) error {
 		index = uint(i + 1)
 		if inV, ok = filler.nounVals[index]; !ok {
 			return fmt.Errorf("noun id %d not found in struct definition", i)
+		}
+		if inV.Kind() == reflect.Pointer && inV.IsNil() {
+			inV.Set(reflect.New(inV.Type().Elem()))
 		}
 
 		if inV.Kind() != reflect.Pointer {
@@ -89,7 +91,10 @@ func (filler *Filler) getActNounCompleter() cobra.CompletionFunc {
 		filler.parseNoun(args) //no need to check return error since this is just for completion
 		index := len(args) + 1
 		if cf, ok := filler.nounCompleters[uint(index)]; ok {
-			return cf(cmd, args, toComplete)
+			if cf != nil {
+				return cf(cmd, args, toComplete)
+			}
+			return nil, cobra.ShellCompDirectiveDefault
 		}
 		return nil, cobra.ShellCompDirectiveDefault
 	}
@@ -143,17 +148,18 @@ func (filler *Filler) getUse() string {
 
 // this replaces cobra default usageFunc to add noun part
 func (filler *Filler) usageFunc(c *cobra.Command) error {
-	fmt.Print("Usage:")
+	out := c.OutOrStdout()
+	fmt.Fprint(out, "Usage:")
 	if c.Runnable() {
-		fmt.Printf("\n  %s", c.UseLine())
+		fmt.Fprintf(out, "\n  %s", c.UseLine())
 	}
 
 	if c.HasAvailableSubCommands() {
-		fmt.Printf("\n  %s [command]", c.CommandPath())
+		fmt.Fprintf(out, "\n  %s [command]", c.CommandPath())
 	}
 	if len(filler.nounFields) > 0 {
-		fmt.Printf("\n\nArguments:")
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 4, ' ', 0)
+		fmt.Fprintf(out, "\n\nArguments:")
+		w := tabwriter.NewWriter(out, 0, 0, 4, ' ', 0)
 
 		for _, id := range filler.getSortedNounIDs() {
 			defStr := fmt.Sprintf("%s", filler.nounVals[id].Interface())
@@ -171,61 +177,61 @@ func (filler *Filler) usageFunc(c *cobra.Command) error {
 		w.Flush()
 	}
 	if len(c.Aliases) > 0 {
-		fmt.Printf("\n\nAliases:\n")
-		fmt.Printf("  %s", c.NameAndAliases())
+		fmt.Fprintf(out, "\n\nAliases:\n")
+		fmt.Fprintf(out, "  %s", c.NameAndAliases())
 	}
 	if c.HasExample() {
-		fmt.Printf("\n\nExamples:\n")
-		fmt.Printf("%s", c.Example)
+		fmt.Fprintf(out, "\n\nExamples:\n")
+		fmt.Fprintf(out, "%s", c.Example)
 	}
 	if c.HasAvailableSubCommands() {
 		cmds := c.Commands()
 		if len(c.Groups()) == 0 {
-			fmt.Printf("\n\nAvailable Commands:")
+			fmt.Fprintf(out, "\n\nAvailable Commands:")
 			for _, subcmd := range cmds {
 				if subcmd.IsAvailableCommand() || subcmd.Name() == "help" {
-					fmt.Printf("\n  %s %s", rpad(subcmd.Name(), subcmd.NamePadding()), subcmd.Short)
+					fmt.Fprintf(out, "\n  %s %s", rpad(subcmd.Name(), subcmd.NamePadding()), subcmd.Short)
 				}
 			}
 		} else {
 			for _, group := range c.Groups() {
-				fmt.Printf("\n\n%s", group.Title)
+				fmt.Fprintf(out, "\n\n%s", group.Title)
 				for _, subcmd := range cmds {
 					if subcmd.GroupID == group.ID && (subcmd.IsAvailableCommand() || subcmd.Name() == "help") {
-						fmt.Printf("\n  %s %s", rpad(subcmd.Name(), subcmd.NamePadding()), subcmd.Short)
+						fmt.Fprintf(out, "\n  %s %s", rpad(subcmd.Name(), subcmd.NamePadding()), subcmd.Short)
 					}
 				}
 			}
 			if !c.AllChildCommandsHaveGroup() {
-				fmt.Printf("\n\nAdditional Commands:")
+				fmt.Fprintf(out, "\n\nAdditional Commands:")
 				for _, subcmd := range cmds {
 					if subcmd.GroupID == "" && (subcmd.IsAvailableCommand() || subcmd.Name() == "help") {
-						fmt.Printf("\n  %s %s", rpad(subcmd.Name(), subcmd.NamePadding()), subcmd.Short)
+						fmt.Fprintf(out, "\n  %s %s", rpad(subcmd.Name(), subcmd.NamePadding()), subcmd.Short)
 					}
 				}
 			}
 		}
 	}
 	if c.HasAvailableLocalFlags() {
-		fmt.Printf("\n\nFlags:\n")
-		fmt.Print(trimRightSpace(c.LocalFlags().FlagUsages()))
+		fmt.Fprintf(out, "\n\nFlags:\n")
+		fmt.Fprint(out, trimRightSpace(c.LocalFlags().FlagUsages()))
 	}
 	if c.HasAvailableInheritedFlags() {
-		fmt.Printf("\n\nGlobal Flags:\n")
-		fmt.Print(trimRightSpace(c.InheritedFlags().FlagUsages()))
+		fmt.Fprintf(out, "\n\nGlobal Flags:\n")
+		fmt.Fprint(out, trimRightSpace(c.InheritedFlags().FlagUsages()))
 	}
 	if c.HasHelpSubCommands() {
-		fmt.Printf("\n\nAdditional help topics:")
+		fmt.Fprintf(out, "\n\nAdditional help topics:")
 		for _, subcmd := range c.Commands() {
 			if subcmd.IsAdditionalHelpTopicCommand() {
-				fmt.Printf("\n  %s %s", rpad(subcmd.CommandPath(), subcmd.CommandPathPadding()), subcmd.Short)
+				fmt.Fprintf(out, "\n  %s %s", rpad(subcmd.CommandPath(), subcmd.CommandPathPadding()), subcmd.Short)
 			}
 		}
 	}
 	if c.HasAvailableSubCommands() {
-		fmt.Printf("\n\nUse \"%s [command] --help\" for more information about a command.", c.CommandPath())
+		fmt.Fprintf(out, "\n\nUse \"%s [command] --help\" for more information about a command.", c.CommandPath())
 	}
-	fmt.Println()
+	fmt.Fprintln(out)
 	return nil
 }
 func rpad(s string, padding int) string {

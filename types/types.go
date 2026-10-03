@@ -96,12 +96,15 @@ func macFromStr(text string, tag reflect.StructTag) (any, error) {
 	default:
 		return nil, fmt.Errorf("can't find supported MAC format")
 	}
+	if len(flist) != 6 {
+		return nil, fmt.Errorf("not a valid MAC address, requires exactly 6 numbers")
+	}
 	for i, v := range flist {
 		x, err := strconv.ParseInt(strings.TrimSpace(v), 16, 64)
 		if err != nil {
 			return nil, fmt.Errorf("%v is not valid byte value in hex", v)
 		}
-		if x >= 255 {
+		if x > 255 {
 			return nil, fmt.Errorf("%v is not valid byte value in hex, should be <256", v)
 		}
 		r[i] = byte(x)
@@ -110,20 +113,42 @@ func macFromStr(text string, tag reflect.StructTag) (any, error) {
 
 }
 
+// deref returns the value in points to. A nil pointer yields nil.
+func deref(in any) any {
+	v := reflect.ValueOf(in)
+	if v.Kind() != reflect.Pointer {
+		return in
+	}
+	if v.IsNil() {
+		return nil
+	}
+	return v.Elem().Interface()
+}
+
 // just the net.Hardware.String()
 func macToStr(in any, tag reflect.StructTag) string {
-	v := in.(net.HardwareAddr)
-	return v.String()
+	v := deref(in)
+	if v == nil {
+		return ""
+	}
+	return v.(net.HardwareAddr).String()
 }
 
 func ipnetFromStr(text string, tag reflect.StructTag) (any, error) {
 	_, r, err := net.ParseCIDR(text)
+	if err != nil || r == nil {
+		return nil, err
+	}
 	return *r, err
 }
 
 func ipnetToStr(in any, tag reflect.StructTag) string {
-	v := in.(net.IPNet)
-	return v.String()
+	v := deref(in)
+	if v == nil {
+		return ""
+	}
+	n := v.(net.IPNet)
+	return n.String()
 }
 
 func ipFromStr(text string, tag reflect.StructTag) (any, error) {
@@ -135,7 +160,11 @@ func ipFromStr(text string, tag reflect.StructTag) (any, error) {
 }
 
 func ipToStr(in any, tag reflect.StructTag) string {
-	return in.(net.IP).String()
+	v := deref(in)
+	if v == nil {
+		return ""
+	}
+	return v.(net.IP).String()
 }
 
 // DefaultTimeLayout is the default layout string to parse time, following golang time.Parse() format,
@@ -148,7 +177,11 @@ func timeToStr(in any, tag reflect.StructTag) string {
 	if layout == "" {
 		layout = DefaultTimeLayout
 	}
-	return in.(time.Time).Format(layout)
+	v := deref(in)
+	if v == nil {
+		return ""
+	}
+	return v.(time.Time).Format(layout)
 }
 
 func timeFromStr(s string, tag reflect.StructTag) (any, error) {
@@ -160,7 +193,11 @@ func timeFromStr(s string, tag reflect.StructTag) (any, error) {
 }
 
 func durationToStr(in any, tag reflect.StructTag) string {
-	return fmt.Sprint(in)
+	v := deref(in)
+	if v == nil {
+		return ""
+	}
+	return fmt.Sprint(v)
 }
 func durationFromStr(s string, tag reflect.StructTag) (any, error) {
 	return time.ParseDuration(s)

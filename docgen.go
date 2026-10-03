@@ -2,7 +2,6 @@ package myflags
 
 import (
 	"fmt"
-	"log"
 	"strconv"
 
 	"github.com/spf13/cobra"
@@ -19,14 +18,15 @@ type genDoc struct {
 	} `usage:"generate manpage doc" action:"DoManpage"`
 }
 
-func (docgen *genDoc) DoMarkdown(cmd *cobra.Command, args []string) {
+func (docgen *genDoc) DoMarkdown(cmd *cobra.Command, args []string) error {
 	err := doc.GenMarkdownTree(cmd.Root(), docgen.Output)
 	if err != nil {
-		fmt.Println("failed to generate markdown", err)
+		return fmt.Errorf("failed to generate markdown: %w", err)
 	}
+	return nil
 }
 
-func (docgen *genDoc) DoManpage(cmd *cobra.Command, args []string) {
+func (docgen *genDoc) DoManpage(cmd *cobra.Command, args []string) error {
 	t := cmd.Root().Name()
 	if docgen.Manpage.Title != "" {
 		t = docgen.Manpage.Title
@@ -37,8 +37,9 @@ func (docgen *genDoc) DoManpage(cmd *cobra.Command, args []string) {
 	}
 	err := doc.GenManTree(cmd.Root(), header, docgen.Output)
 	if err != nil {
-		fmt.Println("failed to generate manpage", err)
+		return fmt.Errorf("failed to generate manpage: %w", err)
 	}
+	return nil
 }
 
 func defGenDoc() *genDoc {
@@ -51,19 +52,12 @@ func defGenDoc() *genDoc {
 // DocgenCMDName is the optional command to generate docs
 const DocgenCMDName = "docgen"
 
-var genDocSetup *genDoc
-var docFiller *Filler
-
-func init() {
-	genDocSetup = defGenDoc()
-	docFiller = NewFiller(DocgenCMDName, "generate docs")
-	err := docFiller.Fill(genDocSetup)
-	if err != nil {
-		log.Fatal(err)
-		docFiller = nil
-		return
+func newDocFiller() (*Filler, error) {
+	f := NewFiller(DocgenCMDName, "generate docs")
+	if err := f.Fill(defGenDoc()); err != nil {
+		return nil, err
 	}
-
+	return f, nil
 }
 
 // include doc generation command

@@ -1,8 +1,13 @@
 package myflags_test
 
 import (
+	"bytes"
 	"fmt"
+	"io"
+	"net"
 	"net/netip"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -472,4 +477,479 @@ func deepEqual(in, expect any) bool {
 	}
 	// fmt.Println(3333333333, valIn.Interface(), valExpect.Interface())
 	return reflect.DeepEqual(valIn.Interface(), valExpect.Interface())
+}
+
+func newApp(t *testing.T, in any, opts ...myflags.FillerOption) *myflags.Filler {
+	t.Helper()
+	all := []myflags.FillerOption{
+		myflags.WithFlagErrHandling(flag.ContinueOnError),
+		myflags.WithRootMethod(func(cmd *cobra.Command, args []string) {}),
+	}
+	all = append(all, opts...)
+	f := myflags.NewFiller("app", "test", all...)
+	if err := f.Fill(in); err != nil {
+		t.Fatal(err)
+	}
+	f.SetOut(io.Discard)
+	f.SetErr(io.Discard)
+	return f
+}
+
+func noPanic(t *testing.T, fn func()) {
+	t.Helper()
+	defer func() {
+		if rec := recover(); rec != nil {
+			t.Fatalf("panicked: %v", rec)
+		}
+	}()
+	fn()
+}
+
+func captureStdout(t *testing.T, fn func()) (out string) {
+	t.Helper()
+	old := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+	var buf bytes.Buffer
+	done := make(chan struct{})
+	go func() {
+		_, _ = io.Copy(&buf, r)
+		close(done)
+	}()
+	defer func() {
+		os.Stdout = old
+		_ = w.Close()
+		<-done
+		_ = r.Close()
+		out = buf.String()
+	}()
+	fn()
+	return out
+}
+
+func TestFloatParseError(t *testing.T) {
+	t.Run("scalar", func(t *testing.T) {
+		cfg := struct {
+			F float64
+		}{F: 1.5}
+		f := newApp(t, &cfg)
+		f.SetArgs([]string{"--f", "nope"})
+		var err error
+		noPanic(t, func() { err = f.Execute() })
+		if err == nil {
+			t.Fatalf("invalid float was accepted, value=%v", cfg.F)
+		}
+		if cfg.F != 1.5 {
+			t.Fatalf("F=%v, want the original 1.5", cfg.F)
+		}
+	})
+	t.Run("slice", func(t *testing.T) {
+		cfg := struct {
+			Vals []float64
+		}{}
+		f := newApp(t, &cfg)
+		f.SetArgs([]string{"--vals", "1.5,nope"})
+		var err error
+		noPanic(t, func() { err = f.Execute() })
+		if err == nil {
+			t.Fatalf("invalid float slice was accepted, value=%v", cfg.Vals)
+		}
+	})
+}
+
+func TestIPNetRejectsInvalidCIDR(t *testing.T) {
+	cfg := struct {
+		CIDR net.IPNet
+	}{}
+	f := newApp(t, &cfg)
+	f.SetArgs([]string{"--cidr", "not-a-cidr"})
+	var err error
+	noPanic(t, func() { err = f.Execute() })
+	if err == nil {
+		t.Fatalf("invalid CIDR was accepted: %v", cfg.CIDR)
+	}
+}
+
+func TestMACParser(t *testing.T) {
+	parse := func(t *testing.T, text string) (net.HardwareAddr, error) {
+		t.Helper()
+		cfg := struct {
+			MAC net.HardwareAddr
+		}{}
+		f := newApp(t, &cfg)
+		f.SetArgs([]string{"--mac", text})
+		var err error
+		noPanic(t, func() { err = f.Execute() })
+		return cfg.MAC, err
+	}
+
+	t.Run("ff", func(t *testing.T) {
+		mac, err := parse(t, "aa:bb:cc:dd:ee:ff")
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff}
+		if mac.String() != want.String() {
+			t.Fatalf("MAC=%s, want %s", mac, want)
+		}
+	})
+	t.Run("short", func(t *testing.T) {
+		mac, err := parse(t, "aa:bb:cc")
+		if err == nil {
+			t.Fatalf("short MAC was accepted: %s", mac)
+		}
+	})
+	t.Run("long", func(t *testing.T) {
+		_, err := parse(t, "11:22:33:44:55:66:77")
+		if err == nil {
+			t.Fatal("overlong MAC was accepted")
+		}
+	})
+}
+
+type bugNounAct struct {
+	Path string `noun:"1" usage:"path"`
+}
+
+type bugNounRoot struct {
+	Act bugNounAct `action:""`
+}
+
+func TestNounCompletionWithoutCompleter(t *testing.T) {
+	f := newApp(t, &bugNounRoot{})
+	cmd := f.GetChildCommand("/act")
+	if cmd == nil || cmd.ValidArgsFunction == nil {
+		t.Fatal("act command has no argument completer")
+	}
+	noPanic(t, func() {
+		_, _ = cmd.ValidArgsFunction(cmd, []string{}, "p")
+	})
+}
+
+type bugReqInner struct {
+	Name string `required:"" usage:"name"`
+}
+
+type bugReqRoot struct {
+	Inner bugReqInner
+}
+
+func TestRequiredOnNestedStruct(t *testing.T) {
+	cfg := bugReqRoot{}
+	f := newApp(t, &cfg)
+	fl := f.PersistentFlags().Lookup("inner-name")
+	if fl == nil {
+		t.Fatal("flag inner-name was not created")
+	}
+	if _, ok := fl.Annotations[cobra.BashCompOneRequiredFlag]; !ok {
+		t.Fatal("nested field Inner.Name was not marked required")
+	}
+	if err := f.Execute(); err == nil {
+		t.Fatal("Execute succeeded without required flag inner-name")
+	}
+}
+
+type bugChoiceInner struct {
+	Color string `choices:"red,blue" usage:"color"`
+}
+
+type bugChoiceRoot struct {
+	Inner bugChoiceInner
+}
+
+func TestChoicesOnNestedStruct(t *testing.T) {
+	f := newApp(t, &bugChoiceRoot{})
+	if f.PersistentFlags().Lookup("inner-color") == nil {
+		t.Fatal("flag inner-color was not created")
+	}
+	fn, ok := f.GetFlagCompletionFunc("inner-color")
+	if !ok {
+		t.Fatal("choices on nested field Inner.Color were not registered")
+	}
+	got, _ := fn(f.Command, nil, "")
+	if strings.Join(got, ",") != "red,blue" {
+		t.Fatalf("completions=%v", got)
+	}
+}
+
+type bugSliceChoice struct {
+	Colors []string `choices:"red,blue" usage:"colors"`
+}
+
+func TestChoicesOnSlice(t *testing.T) {
+	cfg := bugSliceChoice{}
+	f := myflags.NewFiller("app", "test")
+	err := f.Fill(&cfg)
+	if err == nil {
+		t.Fatal("expected an error for choices on a slice")
+	}
+	if !strings.Contains(err.Error(), "choices") || !strings.Contains(err.Error(), "Colors") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+type bugBox struct {
+	Color string `complete:"Colors" usage:"color"`
+}
+
+func (b *bugBox) Colors(cmd *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
+	return []cobra.Completion{"red"}, cobra.ShellCompDirectiveNoFileComp
+}
+
+type bugBoxRoot struct {
+	Box bugBox `action:""`
+}
+
+func TestCompleteMethodOnNestedStructIsNotUsed(t *testing.T) {
+	cfg := bugBoxRoot{}
+	f := myflags.NewFiller("app", "test", myflags.WithFlagErrHandling(flag.ContinueOnError))
+	err := f.Fill(&cfg)
+	if err == nil {
+		t.Fatal("expected complete method on the nested struct to be ignored")
+	}
+	if !strings.Contains(err.Error(), "Colors") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+type bugBadCompleteRoot struct {
+	Color string `complete:"Colors" usage:"color"`
+}
+
+func (r *bugBadCompleteRoot) Colors() {}
+
+func TestCompleteMethodWrongSignature(t *testing.T) {
+	cfg := bugBadCompleteRoot{}
+	f := myflags.NewFiller("app", "test")
+	var err error
+	noPanic(t, func() { err = f.Fill(&cfg) })
+	if err == nil {
+		t.Fatal("expected an error for a complete method with the wrong signature")
+	}
+}
+
+type bugBadActionRoot struct {
+	Child struct{} `action:"Go"`
+}
+
+func (r *bugBadActionRoot) Go() {}
+
+func TestActionMethodWrongSignature(t *testing.T) {
+	cfg := bugBadActionRoot{}
+	f := myflags.NewFiller("app", "test")
+	var err error
+	noPanic(t, func() { err = f.Fill(&cfg) })
+	if err == nil {
+		t.Fatal("expected an error for an action method with the wrong signature")
+	}
+}
+
+type bugNestedComplete struct {
+	Color string `complete:"Colors" usage:"color"`
+}
+
+type bugNestedCompleteRoot struct {
+	Nested bugNestedComplete
+}
+
+func (r *bugNestedCompleteRoot) Colors(cmd *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
+	return []cobra.Completion{"red"}, cobra.ShellCompDirectiveNoFileComp
+}
+
+func TestCompleteOnNestedStructNotRegistered(t *testing.T) {
+	f := newApp(t, &bugNestedCompleteRoot{})
+	if f.PersistentFlags().Lookup("nested-color") == nil {
+		t.Fatal("flag nested-color was not created")
+	}
+	fn, ok := f.GetFlagCompletionFunc("nested-color")
+	if !ok {
+		t.Fatal("complete method for nested field Nested.Color was not registered")
+	}
+	got, _ := fn(f.Command, nil, "")
+	if strings.Join(got, ",") != "red" {
+		t.Fatalf("completions=%v", got)
+	}
+}
+
+func TestArrayRejectsTooManyElements(t *testing.T) {
+	cfg := struct {
+		Names [2]string
+	}{}
+	f := newApp(t, &cfg)
+	f.SetArgs([]string{"--names", "a,b,c"})
+	var err error
+	noPanic(t, func() { err = f.Execute() })
+	if err == nil {
+		t.Fatalf("too many array elements were accepted: %q", cfg.Names)
+	}
+}
+
+func TestNilPointerNoun(t *testing.T) {
+	cfg := struct {
+		Name *string `noun:"1" usage:"name"`
+	}{}
+	f := newApp(t, &cfg)
+	f.SetArgs([]string{"hello"})
+	var err error
+	noPanic(t, func() { err = f.Execute() })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Name == nil || *cfg.Name != "hello" {
+		t.Fatalf("Name=%v, want hello", cfg.Name)
+	}
+}
+
+func TestPointerNounUsage(t *testing.T) {
+	when := time.Date(2020, 1, 2, 3, 4, 5, 0, time.UTC)
+	cfg := struct {
+		When *time.Time `noun:"1" usage:"when"`
+	}{When: &when}
+	f := newApp(t, &cfg)
+	var buf bytes.Buffer
+	f.SetOut(&buf)
+	f.SetErr(&buf)
+	if err := f.UsageFunc()(f.Command); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), `default "2020-01-02 03:04:05"`) {
+		t.Fatalf("usage=%q", buf.String())
+	}
+
+	summary := myflags.SummaryFillerUsageStr(f, "")
+	if !strings.Contains(summary, `default:"2020-01-02 03:04:05"`) {
+		t.Fatalf("summary=%q", summary)
+	}
+}
+
+type bugRec struct {
+	A string
+	B string
+}
+
+func (r bugRec) MarshalText() ([]byte, error) {
+	return []byte(r.A + "/" + r.B), nil
+}
+
+func (r *bugRec) UnmarshalText(text []byte) error {
+	a, b, found := strings.Cut(string(text), "/")
+	r.A = a
+	if found {
+		r.B = b
+	}
+	return nil
+}
+
+func TestTextListElementsAreIndependent(t *testing.T) {
+	cfg := struct {
+		Items []bugRec
+	}{}
+	f := newApp(t, &cfg)
+	f.SetArgs([]string{"--items", "a/b,c"})
+	if err := f.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	want := []bugRec{{A: "a", B: "b"}, {A: "c", B: ""}}
+	if len(cfg.Items) != len(want) {
+		t.Fatalf("got %+v, want %+v", cfg.Items, want)
+	}
+	for i := range want {
+		if cfg.Items[i] != want[i] {
+			t.Fatalf("got %+v, want %+v", cfg.Items, want)
+		}
+	}
+}
+
+func TestDocgenFailureIsReturned(t *testing.T) {
+	var cfg struct{}
+	f := newApp(t, &cfg, myflags.WithDocGenCMD())
+	t.Cleanup(func() {
+		cmd := f.GetChildCommand("/docgen")
+		if cmd == nil {
+			return
+		}
+		if fl := cmd.Flags().Lookup("output"); fl != nil {
+			_ = fl.Value.Set("./")
+		}
+	})
+	bad := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(bad, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f.SetArgs([]string{"docgen", "markdown", "--output", bad})
+	var execErr error
+	out := captureStdout(t, func() {
+		execErr = f.Execute()
+	})
+	if execErr == nil {
+		t.Fatalf("docgen reported success after generation failed, output=%q", out)
+	}
+}
+
+func TestDocgenCommandIsPerFiller(t *testing.T) {
+	var first, second struct{}
+	fa := newApp(t, &first, myflags.WithDocGenCMD())
+	fb := newApp(t, &second, myflags.WithDocGenCMD())
+	da := fa.GetChildCommand("/docgen")
+	db := fb.GetChildCommand("/docgen")
+	if da == nil || db == nil {
+		t.Fatalf("docgen missing: first=%v second=%v", da != nil, db != nil)
+	}
+	if da == db {
+		t.Fatal("fillers share one docgen command")
+	}
+	if da.Parent() != fa.Command || db.Parent() != fb.Command {
+		t.Fatal("docgen command parent does not match the filler that created it")
+	}
+}
+
+func TestUsageHonorsSetOut(t *testing.T) {
+	cfg := struct {
+		Name string `usage:"the name"`
+	}{}
+	f := newApp(t, &cfg)
+	var buf bytes.Buffer
+	f.SetOut(&buf)
+	f.SetErr(&buf)
+	f.SetArgs([]string{"--help"})
+	_ = f.Execute()
+	if !strings.Contains(buf.String(), "the name") {
+		t.Fatalf("help output=%q", buf.String())
+	}
+}
+
+func TestEmptyChildPath(t *testing.T) {
+	var cfg struct{}
+	f := newApp(t, &cfg)
+	t.Run("filler", func(t *testing.T) {
+		var got *myflags.Filler
+		noPanic(t, func() { got = f.GetChildFiller("") })
+		if got != nil {
+			t.Fatalf("GetChildFiller returned %#v", got)
+		}
+	})
+	t.Run("command", func(t *testing.T) {
+		var got *cobra.Command
+		noPanic(t, func() { got = f.GetChildCommand("") })
+		if got != nil {
+			t.Fatalf("GetChildCommand returned %#v", got)
+		}
+	})
+}
+
+func TestIntNoun(t *testing.T) {
+	in := struct {
+		Count int `noun:"1" usage:"count"`
+	}{}
+	f := newApp(t, &in)
+	f.SetArgs([]string{"42"})
+	if err := f.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if in.Count != 42 {
+		t.Fatalf("Count=%d, want 42", in.Count)
+	}
 }

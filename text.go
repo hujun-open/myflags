@@ -6,7 +6,7 @@ import (
 )
 
 type textMarshalConverter struct {
-	unmarshaller encoding.TextUnmarshaler
+	elem reflect.Type
 }
 
 func (tmc *textMarshalConverter) ToStr(in any, tag reflect.StructTag) string {
@@ -15,11 +15,10 @@ func (tmc *textMarshalConverter) ToStr(in any, tag reflect.StructTag) string {
 }
 
 func (tmc *textMarshalConverter) FromStr(input string, tag reflect.StructTag) (any, error) {
-	err := tmc.unmarshaller.UnmarshalText([]byte(input))
+	fresh := reflect.New(tmc.elem)
+	err := fresh.Interface().(encoding.TextUnmarshaler).UnmarshalText([]byte(input))
 	if err != nil {
 		return nil, err
 	}
-	val := reflect.ValueOf(tmc.unmarshaller)
-	return val.Elem().Interface(), nil
-
+	return fresh.Elem().Interface(), nil
 }

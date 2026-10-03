@@ -1,8 +1,6 @@
 package myflags
 
 import (
-	"encoding"
-
 	// "flag"
 	"fmt"
 	"reflect"
@@ -76,7 +74,11 @@ func (list *listType) Set(s string) error {
 			}
 		} else {
 			//array
+			if i >= list.val.Elem().Cap() {
+				return fmt.Errorf("the number of specified values exceed's array capacity %d", list.val.Elem().Cap())
+			}
 			if !isElmPointer {
+
 				list.val.Elem().Index(i).Set(reflect.ValueOf(n))
 			} else {
 				newval := reflect.New(list.val.Type().Elem().Elem().Elem())
@@ -93,20 +95,20 @@ func getListType(ref reflect.Value, tag reflect.StructTag) (*listType, error) {
 	rconv := globalRegistry.GetViaType(ref.Type().Elem().Elem())
 	var newval listType
 	if rconv == nil {
-		var unm reflect.Value
+		var elem reflect.Type
 		if ref.Type().Elem().Elem().Implements(textEncodingInt) {
 			//list of pointer to textmarshalce
-			unm = reflect.New(ref.Type().Elem().Elem().Elem())
+			elem = ref.Type().Elem().Elem().Elem()
 
 		} else {
 			if reflect.PointerTo(ref.Type().Elem().Elem()).Implements(textEncodingInt) {
 				//list of textmarshalce
-				unm = reflect.New(ref.Type().Elem().Elem())
+				elem = ref.Type().Elem().Elem()
 			}
 		}
-		if unm.IsValid() {
+		if elem != nil {
 			newval = listType{val: ref, tags: tag,
-				conv: &textMarshalConverter{unmarshaller: unm.Interface().(encoding.TextUnmarshaler)}}
+				conv: &textMarshalConverter{elem: elem}}
 		} else {
 			return nil, fmt.Errorf("%v is not registered", ref.Type().Elem().Elem())
 		}

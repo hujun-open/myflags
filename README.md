@@ -112,7 +112,7 @@ Following struct field tags are supported:
 - action: this field is an action, the value is the method name to run
 - required: this field is a mandatory required flag
 - choices: a comma separated list of value choices for the field, used for shell completion
-- complete: the value is the method name for shell completion
+- complete: the value is the method name for shell completion. The method is resolved on the field's type, then on the root struct; see Shell Completion
 
 
 ## Supported Types
@@ -191,6 +191,8 @@ there are two options on how to complete a flag or postional argument
 - use `complete` tag to specify a completion metho with type of [`cobra.CompletionFunc`](https://pkg.go.dev/github.com/spf13/cobra#CompletionFunc)
 
 both tags can't be used at the same time for a given flag or argument.
+
+The method named by `complete` is looked up on the field value's type first, then on the root struct passed to `Fill`. A method defined on a nested or embedded struct that only contains the field is not used. For ordinary flag types such as `string` and `int`, define the method on the root struct. In the example, `SvrComplete` and `ExtractInputComplete` are methods of `ZipCLI` for this reason, including `ExtractInputComplete`, whose flag is a field of the nested `Extract` command.
 
 [github.com/hujun-open/completers](https://github.com/hujun-open/completers) contains a collection of completion methods that could be used by myflags.
 
